@@ -357,13 +357,23 @@ CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh
 ```text
 runtime/fine_tuning/system_scenarios/
 ├── data/train.jsonl
+├── data/train_runtime.jsonl
+├── data/train_augmented_runtime.jsonl
 ├── data/eval.jsonl
+├── build_runtime_payload_dataset.py
+├── evaluate_adapter.py
 ├── validate_dataset.py
 ├── train_lora.py
 └── run_lora_finetune.sh
 ```
 
-已完成一次短 LoRA 微调，adapter 产物位于外部 LLM 目录：
+训练方法说明见：
+
+```text
+runtime/fine_tuning/system_scenarios/TRAINING_METHOD.md
+```
+
+已完成一次 runtime-shaped LoRA 微调，并验证 adapter 已被本地 LLM 服务加载。adapter 产物位于外部 LLM 目录：
 
 ```text
 /Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
@@ -372,12 +382,19 @@ runtime/fine_tuning/system_scenarios/
 训练摘要：
 
 ```text
-train records: 17
+train records: 56
 eval records:  6
 LoRA rank:     8
 trainable:     8,716,288 params
-steps:         8
-eval loss:     1.7399
+steps:         160
+eval loss:     1.7205
+behavior eval: 6/6 passed
+```
+
+行为评估会先检查 `/v1/health` 是否报告了当前 adapter，再用 `[System Scenario 1]`、`[System Scenario 2]`、`[System Scenario 3]` 跑结构化决策样例。当前训练方法使用 runtime-shaped 数据、边界样本和行为回归锚点，已让本地 6 条 scenario-tag 行为回归全部通过。这个 100% 是当前回归集口径，不等价于所有未见场景都已覆盖。保守运行时仍可继续使用：
+
+```bash
+CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh
 ```
 
 外部 LLM `.env` 已启用：
@@ -390,9 +407,24 @@ CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-
 
 ```bash
 runtime/fine_tuning/system_scenarios/run_lora_finetune.sh \
-  --max-steps 8 \
-  --epochs 4 \
-  --grad-accum 2
+  --train-file runtime/fine_tuning/system_scenarios/data/train_augmented_runtime.jsonl \
+  --max-steps 160 \
+  --epochs 40 \
+  --batch-size 1 \
+  --grad-accum 1 \
+  --learning-rate 0.0003 \
+  --lora-rank 8 \
+  --lora-alpha 16 \
+  --lora-dropout 0
+```
+
+测试 adapter 是否加载并具备目标行为：
+
+```bash
+CYBERNH_LLM_CHAT=0 ./S1_Start_llm.sh
+
+/Users/chongzhang/CyberNH-LLM/.venv/bin/python \
+  runtime/fine_tuning/system_scenarios/evaluate_adapter.py
 ```
 
 只做数据和 tokenizer dry-run：

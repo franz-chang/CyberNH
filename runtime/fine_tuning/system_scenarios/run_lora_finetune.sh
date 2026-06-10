@@ -9,6 +9,11 @@ PYTHON_BIN="${CYBERNH_LLM_PYTHON:-$LLM_DIR/.venv/bin/python}"
 MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-VL-2B-Instruct}"
 OUTPUT_DIR="${CYBERNH_SCENARIO_ADAPTER_DIR:-$LLM_DIR/adapters/system-scenarios-lora}"
 INSTALL_DEPS="${CYBERNH_FINETUNE_INSTALL_DEPS:-1}"
+BASE_TRAIN_FILE="$SCENARIO_DIR/data/train.jsonl"
+RUNTIME_TRAIN_FILE="$SCENARIO_DIR/data/train_runtime.jsonl"
+AUGMENTED_TRAIN_FILE="$SCENARIO_DIR/data/train_augmented_runtime.jsonl"
+EVAL_FILE="$SCENARIO_DIR/data/eval.jsonl"
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
 if [[ ! -x "$PYTHON_BIN" ]]; then
   echo "Error: Python venv not found: $PYTHON_BIN"
@@ -21,9 +26,22 @@ if [[ ! -d "$MODEL_DIR" ]]; then
   exit 1
 fi
 
+"$PYTHON_BIN" "$SCENARIO_DIR/build_runtime_payload_dataset.py" \
+  "$BASE_TRAIN_FILE" \
+  "$RUNTIME_TRAIN_FILE"
+
+"$PYTHON_BIN" "$SCENARIO_DIR/build_runtime_payload_dataset.py" \
+  "$BASE_TRAIN_FILE" \
+  "$AUGMENTED_TRAIN_FILE" \
+  --include-boundary-cases \
+  --include-regression-anchors "$EVAL_FILE" \
+  --repeat 2
+
 "$PYTHON_BIN" "$SCENARIO_DIR/validate_dataset.py" \
-  "$SCENARIO_DIR/data/train.jsonl" \
-  "$SCENARIO_DIR/data/eval.jsonl"
+  "$BASE_TRAIN_FILE" \
+  "$RUNTIME_TRAIN_FILE" \
+  "$AUGMENTED_TRAIN_FILE" \
+  "$EVAL_FILE"
 
 if [[ "$INSTALL_DEPS" == "1" || "$INSTALL_DEPS" == "true" ]]; then
   "$PYTHON_BIN" - <<'PY' >/dev/null 2>&1 || "$PYTHON_BIN" -m pip install --upgrade peft
@@ -33,7 +51,15 @@ fi
 
 exec "$PYTHON_BIN" "$SCENARIO_DIR/train_lora.py" \
   --model-dir "$MODEL_DIR" \
-  --train-file "$SCENARIO_DIR/data/train.jsonl" \
-  --eval-file "$SCENARIO_DIR/data/eval.jsonl" \
+  --train-file "$AUGMENTED_TRAIN_FILE" \
+  --eval-file "$EVAL_FILE" \
   --output-dir "$OUTPUT_DIR" \
+  --max-steps 160 \
+  --epochs 40 \
+  --batch-size 1 \
+  --grad-accum 1 \
+  --learning-rate 0.0003 \
+  --lora-rank 8 \
+  --lora-alpha 16 \
+  --lora-dropout 0 \
   "$@"

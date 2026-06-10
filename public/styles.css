@@ -940,12 +940,6 @@ body[data-load="overloaded"] .map-telemetry span:last-child strong {
   min-width: 0;
 }
 
-.field.compact {
-  grid-template-columns: 74px minmax(70px, 1fr);
-  flex: 1;
-  margin: 0;
-}
-
 .check-field {
   display: inline-flex;
   align-items: center;
@@ -955,15 +949,22 @@ body[data-load="overloaded"] .map-telemetry span:last-child strong {
   font-size: 12px;
 }
 
-.inline-action {
-  display: flex;
-  gap: 8px;
+.action-field {
   align-items: center;
-  margin: 8px 0;
 }
 
-.inline-action button {
+.field-action-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, auto);
+  gap: 8px;
+  min-width: 0;
+}
+
+.field-action-control button {
+  width: 100%;
   min-width: 96px;
+  padding-inline: 12px;
+  white-space: nowrap;
 }
 
 dl {
@@ -985,6 +986,75 @@ dd {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 820;
+}
+
+.equipment-status-cell {
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-weight: 760;
+  text-align: right;
+}
+
+.equipment-bars {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 10px;
+}
+
+.equipment-bar {
+  display: inline-grid;
+  grid-template-columns: auto minmax(34px, max-content);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.equipment-name {
+  color: #17231f;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.equipment-bar.empty .equipment-name {
+  color: var(--danger);
+}
+
+.equipment-segments {
+  display: grid;
+  grid-template-columns: repeat(var(--segments), 10px);
+  gap: 2px;
+}
+
+.equipment-segment {
+  width: 10px;
+  height: 14px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: #edf3f0;
+}
+
+.equipment-segment.available {
+  border-color: var(--accent-strong);
+  background: linear-gradient(180deg, #1a9991, var(--accent));
+}
+
+.equipment-segment.occupied {
+  background:
+    linear-gradient(135deg, transparent 0 42%, rgba(101, 115, 111, 0.28) 43% 57%, transparent 58% 100%),
+    #edf3f0;
+}
+
+.equipment-bar.empty .equipment-segment.occupied {
+  border-color: rgba(173, 63, 71, 0.45);
+  background:
+    linear-gradient(135deg, transparent 0 42%, rgba(173, 63, 71, 0.32) 43% 57%, transparent 58% 100%),
+    var(--danger-soft);
+}
+
+.equipment-empty {
+  color: var(--muted);
+  font-family: var(--font-mono);
 }
 
 .board-row {
@@ -1223,15 +1293,19 @@ body[data-load="overloaded"] .badge.live {
     grid-template-columns: 1fr;
   }
 
-  .field,
-  .field.compact {
+  .field {
     grid-template-columns: 1fr;
     gap: 4px;
   }
 
-  .inline-action {
-    align-items: stretch;
-    flex-direction: column;
+  .field-action-control {
+    grid-template-columns: minmax(0, 1fr) minmax(92px, auto);
+  }
+
+  .equipment-status-cell,
+  .equipment-bars {
+    justify-content: flex-start;
+    text-align: left;
   }
 
   dl,

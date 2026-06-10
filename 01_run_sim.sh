@@ -12,6 +12,8 @@ LLM_LOG_DIR="$ROOT_DIR/runtime/logs"
 LLM_LOG_FILE="$LLM_LOG_DIR/llm-serve.log"
 LLM_START_MODE="${CYBERNH_START_LLM:-auto}"
 LLM_READY_TIMEOUT_SECONDS="${CYBERNH_LLM_READY_TIMEOUT_SECONDS:-600}"
+PROMPT_MODE="${CYBERNH_SYSTEM_PROMPT_MODE:-scenario_alias}"
+REQUIRE_SCENARIO_ADAPTER="${CYBERNH_REQUIRE_SCENARIO_ADAPTER:-auto}"
 LLM_PID=""
 
 load_env_defaults() {
@@ -71,12 +73,96 @@ is_truthy() {
   esac
 }
 
+prompt_mode_uses_aliases() {
+  case "$PROMPT_MODE" in
+    full|legacy|long)
+      return 1
+      ;;
+    alias|aliases|scenario|scenario_alias|short)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+should_require_scenario_adapter() {
+  case "$REQUIRE_SCENARIO_ADAPTER" in
+    1|true|True|TRUE|yes|Yes|YES|on|On|ON)
+      return 0
+      ;;
+    0|false|False|FALSE|no|No|NO|off|Off|OFF)
+      return 1
+      ;;
+    auto)
+      prompt_mode_uses_aliases && is_local_llm_url
+      return
+      ;;
+    *)
+      echo "Unknown CYBERNH_REQUIRE_SCENARIO_ADAPTER=$REQUIRE_SCENARIO_ADAPTER. Use auto, 1, or 0."
+      exit 1
+      ;;
+  esac
+}
+
 llm_endpoint_ready() {
   local base_url="${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
   base_url="${base_url%/}"
   curl -fsS --max-time 2 \
     -H "Authorization: Bearer ${CYBERNH_LLM_API_KEY:-EMPTY}" \
     "$base_url/models" >/dev/null 2>&1
+}
+
+llm_health_json() {
+  local base_url="${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
+  base_url="${base_url%/}"
+  curl -fsS --max-time 5 \
+    -H "Authorization: Bearer ${CYBERNH_LLM_API_KEY:-EMPTY}" \
+    "$base_url/health" 2>/dev/null
+}
+
+json_field() {
+  local field="$1"
+  node -e '
+const field = process.argv[1];
+let input = "";
+process.stdin.on("data", chunk => input += chunk);
+process.stdin.on("end", () => {
+  try {
+    const parsed = JSON.parse(input);
+    const value = parsed && parsed[field];
+    if (value !== undefined && value !== null) process.stdout.write(String(value));
+  } catch {}
+});
+' "$field"
+}
+
+verify_scenario_adapter() {
+  if ! should_require_scenario_adapter; then
+    return 0
+  fi
+
+  local expected_adapter="${CYBERNH_LLM_ADAPTER_DIR:-}"
+  local health loaded_adapter
+  health="$(llm_health_json || true)"
+  loaded_adapter="$(printf '%s' "$health" | json_field adapter)"
+
+  if [[ -z "$loaded_adapter" ]]; then
+    echo "Error: CYBERNH_SYSTEM_PROMPT_MODE=$PROMPT_MODE uses short scenario tags, but the LLM health endpoint did not report a loaded adapter."
+    echo "Set CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora, or run with:"
+    echo "  CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh"
+    exit 1
+  fi
+
+  if [[ -n "$expected_adapter" && "$loaded_adapter" != "$expected_adapter" ]]; then
+    echo "Error: loaded LLM adapter does not match CYBERNH_LLM_ADAPTER_DIR."
+    echo "Expected: $expected_adapter"
+    echo "Loaded:   $loaded_adapter"
+    exit 1
+  fi
+
+  echo "Scenario adapter verified: $loaded_adapter"
 }
 
 llm_endpoint_port() {
@@ -204,6 +290,7 @@ load_env_defaults "$LLM_DIR/.env"
 
 trap cleanup EXIT INT TERM
 start_llm_if_needed
+verify_scenario_adapter
 
 PORT="$(find_free_port "$DEFAULT_PORT")"
 export PORT
@@ -212,6 +299,7 @@ echo "Starting Cyber-NH from: $ROOT_DIR"
 echo "Dashboard URL: http://localhost:$PORT"
 echo "LLM endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
 echo "LLM model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
+echo "System prompt mode: $PROMPT_MODE"
 echo "LLM start mode: $LLM_START_MODE"
 echo "Press Ctrl+C to stop."
 

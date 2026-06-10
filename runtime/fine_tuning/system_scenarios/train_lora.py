@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 import os
+import random
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -34,6 +35,7 @@ class TrainConfig:
     lora_dropout: float
     device: str
     dtype: str
+    seed: int
 
 
 class ScenarioDataset(Dataset):
@@ -87,20 +89,21 @@ def parse_args() -> argparse.Namespace:
     default_llm_dir = Path(os.getenv("CYBERNH_LLM_DIR", "/Users/chongzhang/CyberNH-LLM"))
     parser = argparse.ArgumentParser(description="LoRA fine-tune Qwen3-VL for CyberNH system scenario tags.")
     parser.add_argument("--model-dir", default=os.getenv("CYBERNH_LLM_LOCAL_DIR", str(default_llm_dir / "models" / "Qwen3-VL-2B-Instruct")))
-    parser.add_argument("--train-file", default=str(root / "data" / "train.jsonl"))
+    parser.add_argument("--train-file", default=str(root / "data" / "train_augmented_runtime.jsonl"))
     parser.add_argument("--eval-file", default=str(root / "data" / "eval.jsonl"))
     parser.add_argument("--output-dir", default=str(default_llm_dir / "adapters" / "system-scenarios-lora"))
-    parser.add_argument("--max-steps", type=int, default=30)
-    parser.add_argument("--epochs", type=int, default=8)
+    parser.add_argument("--max-steps", type=int, default=160)
+    parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--grad-accum", type=int, default=4)
-    parser.add_argument("--learning-rate", type=float, default=2e-4)
+    parser.add_argument("--grad-accum", type=int, default=1)
+    parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--max-length", type=int, default=2048)
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-alpha", type=int, default=16)
-    parser.add_argument("--lora-dropout", type=float, default=0.05)
+    parser.add_argument("--lora-dropout", type=float, default=0.0)
     parser.add_argument("--device", default=os.getenv("CYBERNH_LLM_DEVICE", "auto"))
     parser.add_argument("--dtype", default=os.getenv("CYBERNH_LLM_DTYPE", "auto"))
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--dry-run", action="store_true", help="Validate data and tokenization without loading the model.")
     return parser.parse_args()
 
@@ -157,6 +160,13 @@ def choose_dtype(name: str, device: torch.device) -> torch.dtype:
     if device.type == "mps":
         return torch.float16
     return torch.float32
+
+
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def load_model(model_dir: str, dtype: torch.dtype):
@@ -241,8 +251,10 @@ def main() -> int:
         lora_dropout=args.lora_dropout,
         device=args.device,
         dtype=args.dtype,
+        seed=args.seed,
     )
 
+    seed_everything(args.seed)
     train_records = load_records(args.train_file)
     eval_records = load_records(args.eval_file) if args.eval_file else []
     processor = AutoProcessor.from_pretrained(args.model_dir, trust_remote_code=True)
@@ -253,7 +265,7 @@ def main() -> int:
     train_dataset = ScenarioDataset(train_records, processor, args.max_length)
     eval_dataset = ScenarioDataset(eval_records, processor, args.max_length) if eval_records else None
     lengths = [len(train_dataset[index]["input_ids"]) for index in range(len(train_dataset))]
-    print(f"train_records={len(train_records)} eval_records={len(eval_records)}")
+    print(f"train_records={len(train_records)} eval_records={len(eval_records)} seed={args.seed}")
     print(f"token_length min={min(lengths)} max={max(lengths)} avg={sum(lengths) / len(lengths):.1f}")
     if args.dry_run:
         print("dry_run=1; data and tokenization are valid.")
@@ -293,10 +305,13 @@ def main() -> int:
     model.to(device)
     model.train()
 
+    data_generator = torch.Generator()
+    data_generator.manual_seed(args.seed)
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
+        generator=data_generator,
         collate_fn=lambda batch: collate_batch(batch, tokenizer.pad_token_id),
     )
     eval_loader = (
@@ -314,22 +329,33 @@ def main() -> int:
     target_steps = args.max_steps if args.max_steps > 0 else steps_per_epoch * args.epochs
     global_step = 0
     running_loss = 0.0
+    accumulated_micro_batches = 0
     optimizer.zero_grad(set_to_none=True)
 
     for epoch in range(args.epochs):
-        for micro_step, batch in enumerate(train_loader, start=1):
+        for batch in train_loader:
             batch = {key: value.to(device) for key, value in batch.items()}
-            loss = model(**batch).loss / args.grad_accum
+            raw_loss = model(**batch).loss
+            loss = raw_loss / args.grad_accum
             loss.backward()
-            running_loss += float(loss.detach().cpu())
-            if micro_step % args.grad_accum == 0:
+            running_loss += float(raw_loss.detach().cpu())
+            accumulated_micro_batches += 1
+            if accumulated_micro_batches >= args.grad_accum:
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
-                print(f"step={global_step} epoch={epoch + 1} loss={running_loss:.4f}")
+                print(f"step={global_step} epoch={epoch + 1} loss={running_loss / accumulated_micro_batches:.4f}")
                 running_loss = 0.0
+                accumulated_micro_batches = 0
                 if global_step >= target_steps:
                     break
+        if accumulated_micro_batches > 0 and global_step < target_steps:
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            global_step += 1
+            print(f"step={global_step} epoch={epoch + 1} loss={running_loss / accumulated_micro_batches:.4f}")
+            running_loss = 0.0
+            accumulated_micro_batches = 0
         if global_step >= target_steps:
             break
 

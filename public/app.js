@@ -16,7 +16,6 @@ const controlBindings = [
   ["simulationDaysInput", "simulationDays", "number"],
   ["shiftSelect", "shift", "string"],
   ["congestionSelect", "congestion", "string"],
-  ["layoutSelect", "layout", "string"],
   ["workerCountInput", "workerCount", "number"],
   ["wingDistributionSelect", "wingDistribution", "string"],
   ["oneToOneDayInput", "oneToOneDay", "number"],
@@ -81,7 +80,6 @@ const i18n = {
     "field.simDays": "模拟天数",
     "field.shift": "班次",
     "field.congestion": "拥堵水平",
-    "field.layout": "布局",
     "field.workerCount": "Worker 数量",
     "field.wingDistribution": "楼翼分布",
     "field.oneToOneDay": "一对一日班",
@@ -220,7 +218,6 @@ const i18n = {
     "field.simDays": "Simulation days",
     "field.shift": "Shift",
     "field.congestion": "Congestion",
-    "field.layout": "Layout",
     "field.workerCount": "Worker count",
     "field.wingDistribution": "Wing distribution",
     "field.oneToOneDay": "1:1 day shift",
@@ -500,7 +497,6 @@ function bindControls() {
   $("headerRunBtn").addEventListener("click", runSimulation);
   $("pauseBtn").addEventListener("click", () => postJson("/api/pause"));
   $("stepBtn").addEventListener("click", () => postJson("/api/tick"));
-  $("headerStepBtn").addEventListener("click", () => postJson("/api/tick"));
   $("resetBtn").addEventListener("click", () => postJson("/api/reset", { config: exportSnapshot() }));
   $("manualGenerateBtn").addEventListener("click", () => {
     postJson("/api/manual-demand", { count: numberValue("manualGenerateCountInput", 3) });
@@ -773,9 +769,7 @@ function renderRuntimeStatus(snapshot) {
   const workers = Object.values(snapshot.workers || {});
   const pending = metrics.pendingDemandCount || 0;
   const active = metrics.activeDemandCount || 0;
-  const equipmentText = Object.values(equipment)
-    .map((item) => `${equipmentLabel(item.labelZh)} ${item.available}/${item.total}`)
-    .join(", ");
+  const equipmentBars = renderEquipmentBars(equipment);
   const rows = [
     [t("status.tick"), `${snapshot.tick} / ${snapshot.config.totalDurationTicks || snapshot.config.durationTicks}`],
     [t("status.simulationDay"), `${snapshot.simulationDay || 1} / ${snapshot.config.simulationDays || 1}`],
@@ -789,9 +783,37 @@ function renderRuntimeStatus(snapshot) {
     [t("status.movingWorkers"), workers.filter((worker) => worker.status === "moving").length],
     [t("status.servingWorkers"), workers.filter((worker) => worker.status === "serving").length],
     [t("status.unavailableWorkers"), workers.filter((worker) => worker.status === "unavailable").length],
-    [t("status.equipment"), equipmentText],
+    [t("status.equipment"), { html: equipmentBars, className: "equipment-status-cell" }],
   ];
-  $("runtimeStatusList").innerHTML = rows.map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd>`).join("");
+  $("runtimeStatusList").innerHTML = rows
+    .map(([key, value]) => {
+      if (typeof value === "object" && value?.html !== undefined) {
+        const className = value.className ? ` class="${escapeHtml(value.className)}"` : "";
+        return `<dt>${escapeHtml(key)}</dt><dd${className}>${value.html}</dd>`;
+      }
+      return `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd>`;
+    })
+    .join("");
+}
+
+function renderEquipmentBars(equipment) {
+  const entries = Object.values(equipment || {});
+  if (!entries.length) return `<span class="equipment-empty">-</span>`;
+  return `<div class="equipment-bars">${entries
+    .map((item) => {
+      const total = Math.max(0, Number(item.total) || 0);
+      const available = Math.min(total, Math.max(0, Number(item.available) || 0));
+      const label = equipmentLabel(item.labelZh);
+      const segments = Math.max(1, total);
+      const cells = Array.from({ length: segments }, (_, index) => {
+        const state = index < available ? "available" : "occupied";
+        return `<span class="equipment-segment ${state}"></span>`;
+      }).join("");
+      const stateClass = available === 0 ? "empty" : available === total ? "full" : "partial";
+      const statusText = `${label} ${available} / ${total}`;
+      return `<span class="equipment-bar ${stateClass}" title="${escapeHtml(statusText)}" aria-label="${escapeHtml(statusText)}"><span class="equipment-name">${escapeHtml(label)}</span><span class="equipment-segments" style="--segments: ${segments}" aria-hidden="true">${cells}</span></span>`;
+    })
+    .join("")}</div>`;
 }
 
 function renderBroadcastBoard(board) {

@@ -6,6 +6,33 @@ from pydantic import BaseModel
 from .llm_config import load_llm_config
 
 
+WORKER_ACTIONS = [
+    "accept_task",
+    "join_two_person_task",
+    "reject_all",
+    "return_to_station",
+    "continue_task",
+    "pause_current_task",
+    "finish",
+]
+SENIOR_ACTIONS = [
+    "null",
+    "call_worker",
+    "complaint_broadcast",
+    "emergency_broadcast",
+    "feedback_after_service",
+]
+ASSISTANT_PROPOSALS = [
+    "null",
+    "load_warning",
+    "emergency_priority",
+    "equipment_shortage",
+    "coordination_warning",
+    "care_mode_suggestion",
+]
+ASSISTANT_PRIORITIES = ["null", "low", "medium", "high", "highest"]
+
+
 class QwenOpenAICompatibleClient:
     def __init__(self):
         from openai import OpenAI
@@ -23,14 +50,7 @@ class QwenOpenAICompatibleClient:
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": json.dumps(
-                    {
-                        "instruction": "Return one valid JSON object only. No markdown. No chain-of-thought.",
-                        "output_schema": _worker_decision_schema(observation) if observation.get("agentType") == "Worker-Agent" else None,
-                        "observation": observation,
-                    },
-                    ensure_ascii=False,
-                ),
+                "content": json.dumps(_runtime_payload(observation), ensure_ascii=False),
             },
         ]
         kwargs = {
@@ -94,6 +114,39 @@ def _model_validate(schema: Type[BaseModel], payload: dict) -> BaseModel:
     return schema.parse_obj(payload)
 
 
+def _runtime_payload(observation: dict) -> dict:
+    agent_type = observation.get("agentType")
+    if agent_type == "Worker-Agent":
+        output_schema = _worker_decision_schema(observation)
+        important = [
+            "Use exactly these keys: agent_id, action, target_demand_id, reason, confidence, memory_update.",
+            "Only observation.candidateDemands is assignable. Ignore any demand IDs not listed there.",
+            "If no candidate demand is suitable, use action=reject_all and target_demand_id=null.",
+        ]
+    elif agent_type == "Senior-Agent":
+        output_schema = _senior_decision_schema(observation)
+        important = [
+            "Use exactly these keys: agent_id, action, demand_type, reason, mood_delta, patience_delta, memory_update.",
+            "Do not output markdown or commentary.",
+        ]
+    elif agent_type == "Assistant-Agent":
+        output_schema = _assistant_decision_schema()
+        important = [
+            "Use exactly these keys: agent_id, proposal_type, priority, target_demand_ids, target_worker_ids, reason, broadcast_message, memory_update.",
+            "Do not assign tasks directly. Only recommend or broadcast.",
+        ]
+    else:
+        output_schema = None
+        important = ["Return one valid JSON object only."]
+
+    return {
+        "instruction": "Return one valid JSON object only. No markdown. No chain-of-thought.",
+        "output_schema": output_schema,
+        "important": important,
+        "observation": observation,
+    }
+
+
 def _worker_decision_schema(observation: dict) -> dict:
     agent_id = observation.get("agentId")
     target_ids = [demand.get("demandId") for demand in observation.get("candidateDemands", []) if demand.get("demandId")]
@@ -103,17 +156,7 @@ def _worker_decision_schema(observation: dict) -> dict:
         "additionalProperties": False,
         "properties": {
             "agent_id": {"const": agent_id},
-            "action": {
-                "enum": [
-                    "accept_task",
-                    "join_two_person_task",
-                    "reject_all",
-                    "return_to_station",
-                    "continue_task",
-                    "pause_current_task",
-                    "finish",
-                ]
-            },
+            "action": {"enum": WORKER_ACTIONS},
             "target_demand_id": {"enum": [*target_ids, None]},
             "reason": {"type": "string"},
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
@@ -126,5 +169,49 @@ def _worker_decision_schema(observation: dict) -> dict:
             "reason": "距离近且设备可用",
             "confidence": 0.82,
             "memory_update": {},
+        },
+    }
+
+
+def _senior_decision_schema(observation: dict) -> dict:
+    return {
+        "type": "object",
+        "required": ["agent_id", "action", "demand_type", "reason", "mood_delta", "patience_delta", "memory_update"],
+        "additionalProperties": False,
+        "properties": {
+            "agent_id": {"const": observation.get("agentId")},
+            "action": {"enum": SENIOR_ACTIONS},
+            "demand_type": {"type": ["string", "null"]},
+            "reason": {"type": "string"},
+            "mood_delta": {"type": "number", "minimum": -20, "maximum": 20},
+            "patience_delta": {"type": "number", "minimum": -30, "maximum": 30},
+            "memory_update": {"type": "object"},
+        },
+    }
+
+
+def _assistant_decision_schema() -> dict:
+    return {
+        "type": "object",
+        "required": [
+            "agent_id",
+            "proposal_type",
+            "priority",
+            "target_demand_ids",
+            "target_worker_ids",
+            "reason",
+            "broadcast_message",
+            "memory_update",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "agent_id": {"const": "Assistant-01"},
+            "proposal_type": {"enum": ASSISTANT_PROPOSALS},
+            "priority": {"enum": ASSISTANT_PRIORITIES},
+            "target_demand_ids": {"type": "array"},
+            "target_worker_ids": {"type": "array"},
+            "reason": {"type": "string"},
+            "broadcast_message": {"type": "string"},
+            "memory_update": {"type": "object"},
         },
     }
