@@ -1,0 +1,22 @@
+{
+  "version": "2026-06-10",
+  "prompt_mode_env": "CYBERNH_SYSTEM_PROMPT_MODE",
+  "default_prompt_mode": "scenario_alias",
+  "aliases": {
+    "Worker-Agent": {
+      "scenario": "[System Scenario 1]",
+      "source_prompt": "worker_agent.system.md",
+      "description": "Worker-Agent: individual nursing worker decision protocol and WorkerDecision JSON schema."
+    },
+    "Senior-Agent": {
+      "scenario": "[System Scenario 2]",
+      "source_prompt": "senior_agent.system.md",
+      "description": "Senior-Agent: resident demand, complaint, emergency, and feedback protocol."
+    },
+    "Assistant-Agent": {
+      "scenario": "[System Scenario 3]",
+      "source_prompt": "assistant_agent.system.md",
+      "description": "Assistant-Agent: global risk observation and broadcast recommendation protocol."
+    }
+  }
+}

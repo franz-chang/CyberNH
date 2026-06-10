@@ -1,6 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 
+const PROMPT_MODE_ENV = "CYBERNH_SYSTEM_PROMPT_MODE";
+const ALIAS_PROMPT_MODES = new Set(["alias", "aliases", "scenario", "scenario_alias", "short"]);
+const FULL_PROMPT_MODES = new Set(["full", "legacy", "long"]);
+
 const ACTIONS = new Set([
   "accept_task",
   "join_two_person_task",
@@ -201,11 +205,28 @@ function parseDecisionContent(content, observation) {
 }
 
 function loadWorkerSystemPrompt(agentId) {
+  const alias = loadScenarioPromptAlias("Worker-Agent");
+  if (alias) return alias;
+
   const promptPath = path.join(__dirname, "..", "runtime", "prompts", "worker_agent.system.md");
   try {
     return fs.readFileSync(promptPath, "utf8").replaceAll("{{AGENT_ID}}", agentId);
   } catch {
     return `You are Worker-Agent ${agentId}. Return one valid WorkerDecision JSON object only.`;
+  }
+}
+
+function loadScenarioPromptAlias(agentType) {
+  const promptMode = String(process.env[PROMPT_MODE_ENV] || "scenario_alias").trim().toLowerCase();
+  if (FULL_PROMPT_MODES.has(promptMode)) return null;
+  if (!ALIAS_PROMPT_MODES.has(promptMode)) return null;
+
+  const aliasPath = path.join(__dirname, "..", "runtime", "prompts", "scenario_aliases.json");
+  try {
+    const payload = JSON.parse(fs.readFileSync(aliasPath, "utf8"));
+    return payload?.aliases?.[agentType]?.scenario || null;
+  } catch {
+    return null;
   }
 }
 

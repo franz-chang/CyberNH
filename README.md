@@ -330,6 +330,77 @@ src/llmClient.js
 
 仿真器会校验 Worker-Agent 的目标需求是否合法，避免模型选择不在候选集中的 demand。
 
+## System Scenario 微调
+
+为减少 multi-Agent 运行时反复发送长 system prompt 的 token 开销，本项目已把三类 system prompt 压缩为短标记：
+
+```text
+[System Scenario 1] -> Worker-Agent
+[System Scenario 2] -> Senior-Agent
+[System Scenario 3] -> Assistant-Agent
+```
+
+运行时代码默认使用短标记：
+
+- Python/CAMEL 侧：`runtime/agents/prompt_registry.py`
+- Node Worker LLM 侧：`src/llmClient.js`
+- 映射文件：`runtime/prompts/scenario_aliases.json`
+
+如需临时退回原始长 prompt：
+
+```bash
+CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh
+```
+
+微调数据与脚本位于：
+
+```text
+runtime/fine_tuning/system_scenarios/
+├── data/train.jsonl
+├── data/eval.jsonl
+├── validate_dataset.py
+├── train_lora.py
+└── run_lora_finetune.sh
+```
+
+已完成一次短 LoRA 微调，adapter 产物位于外部 LLM 目录：
+
+```text
+/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
+```
+
+训练摘要：
+
+```text
+train records: 17
+eval records:  6
+LoRA rank:     8
+trainable:     8,716,288 params
+steps:         8
+eval loss:     1.7399
+```
+
+外部 LLM `.env` 已启用：
+
+```bash
+CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
+```
+
+重新训练：
+
+```bash
+runtime/fine_tuning/system_scenarios/run_lora_finetune.sh \
+  --max-steps 8 \
+  --epochs 4 \
+  --grad-accum 2
+```
+
+只做数据和 tokenizer dry-run：
+
+```bash
+runtime/fine_tuning/system_scenarios/run_lora_finetune.sh --dry-run
+```
+
 ## 规则数据集
 
 `rules/` 目录保存了规则资料的加工结果：
