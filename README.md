@@ -157,13 +157,79 @@ CYBERNH_LLM_DIR=/absolute/path/to/CyberNH-LLM ./S1_Start_llm.sh
 
 ## LLM 配置
 
+### 本项目当前 LLM 设置
+
+本项目当前使用本地 Qwen3-VL，提供 OpenAI-compatible 接口给 CyberNH 调用。
+
+```text
+Provider:       modelscope-transformers
+Model ID:       Qwen/Qwen3-VL-2B-Instruct
+Served model:   qwen3-vl-2b-instruct
+Endpoint:       http://localhost:8000/v1
+Chat API:       http://localhost:8000/v1/chat/completions
+Runtime dir:    /Users/chongzhang/CyberNH-LLM
+Model dir:      /Users/chongzhang/CyberNH-LLM/models/Qwen3-VL-2B-Instruct
+Python venv:    /Users/chongzhang/CyberNH-LLM/.venv
+```
+
+LLM 目录是一个独立运行目录，不随 Git 仓库提交。这样可以避免把模型权重、虚拟环境、下载缓存和日志推到 GitHub。
+
+当前外部 LLM 目录应包含：
+
+```text
+CyberNH-LLM/
+├── .env                         # 本机实际配置，不进 Git
+├── .env.example                 # 示例配置
+├── README.md                    # LLM 运行目录说明
+├── requirements.txt             # ModelScope/Transformers 依赖
+├── setup_modelscope.sh          # 创建/更新 Python venv
+├── download_model.sh            # 下载 Qwen3-VL 模型
+├── serve_transformers.sh        # 启动 Transformers 服务
+├── serve_transformers_openai.py # OpenAI-compatible server
+├── serve_vllm.sh                # NVIDIA Linux/vLLM 可选入口
+├── chat_cli.py                  # CLI 连续对话入口
+├── .venv/                       # Python 虚拟环境
+└── models/
+    └── Qwen3-VL-2B-Instruct/
+```
+
+### 首次准备 LLM 运行目录
+
+如果是在这台机器上继续开发，默认目录已经是：
+
+```text
+/Users/chongzhang/CyberNH-LLM
+```
+
+如果迁移到新机器，需要先准备同级外部目录，并在其中放置 LLM 运行脚本和 `.env.example`，然后执行：
+
+```bash
+cd /Users/chongzhang/CyberNH-LLM
+./setup_modelscope.sh
+./download_model.sh
+```
+
+`setup_modelscope.sh` 会创建或更新：
+
+```text
+/Users/chongzhang/CyberNH-LLM/.venv
+```
+
+`download_model.sh` 会下载模型到：
+
+```text
+/Users/chongzhang/CyberNH-LLM/models/Qwen3-VL-2B-Instruct
+```
+
+### .env 示例
+
 项目通过环境变量读取 LLM 配置。默认值通常来自外部目录：
 
 ```text
 /Users/chongzhang/CyberNH-LLM/.env
 ```
 
-关键变量：
+当前推荐配置：
 
 ```bash
 CYBERNH_LLM_DIR=/Users/chongzhang/CyberNH-LLM
@@ -177,9 +243,72 @@ CYBERNH_LLM_MAX_TOKENS=512
 CYBERNH_LLM_TIMEOUT_SECONDS=120
 CYBERNH_LLM_JSON_MODE=true
 CYBERNH_LLM_LOCAL_DIR=/Users/chongzhang/CyberNH-LLM/models/Qwen3-VL-2B-Instruct
+CYBERNH_LLM_DEVICE=auto
+CYBERNH_LLM_DTYPE=auto
+CYBERNH_LLM_READY_TIMEOUT_SECONDS=600
 ```
 
-本仓库不会提交 `.env`、模型权重、虚拟环境和日志。
+不要在 `.env` 中提交真实 API key。本仓库不会提交 `.env`、模型权重、虚拟环境和日志。
+
+### 启动本地 Qwen3-VL 服务
+
+推荐从 CyberNH 项目目录启动：
+
+```bash
+cd /Users/chongzhang/CyberNH
+./S1_Start_llm.sh
+```
+
+这个脚本会读取 `/Users/chongzhang/CyberNH-LLM/.env`，检查模型文件和虚拟环境，然后启动：
+
+```bash
+/Users/chongzhang/CyberNH-LLM/serve_transformers.sh
+```
+
+服务 ready 后，`S1_Start_llm.sh` 默认会进入 CLI 连续对话。CLI 命令：
+
+```text
+/help      显示命令
+/reset     清空当前对话历史
+/history   查看当前消息数
+/exit      退出 CLI
+```
+
+如果只想启动服务：
+
+```bash
+CYBERNH_LLM_CHAT=0 ./S1_Start_llm.sh
+```
+
+如果要后台启动并保持运行：
+
+```bash
+CYBERNH_LLM_CHAT=0 CYBERNH_LLM_BACKGROUND=1 ./S1_Start_llm.sh
+```
+
+### 设备与后端
+
+默认后端是 Transformers，适合 macOS/Apple Silicon 的本地测试。设备选择由下面两个变量控制：
+
+```bash
+CYBERNH_LLM_DEVICE=auto   # auto, mps, cuda, cpu
+CYBERNH_LLM_DTYPE=auto    # auto, float16, bfloat16, float32
+```
+
+在 macOS 上，`auto` 会优先尝试 MPS。若迁移到 NVIDIA Linux 主机，可以考虑使用外部目录中的 `serve_vllm.sh`，但需要先在该 venv 中安装 vLLM。
+
+### 远程 LLM 替代方案
+
+如果不使用本地 Qwen3-VL，只要目标服务兼容 OpenAI Chat Completions API，就可以这样运行：
+
+```bash
+CYBERNH_START_LLM=0 \
+CYBERNH_LLM_PROVIDER=openai-compatible \
+CYBERNH_LLM_BASE_URL=http://your-llm-host:8000/v1 \
+CYBERNH_LLM_API_KEY=your-key \
+CYBERNH_LLM_MODEL=your-served-model \
+./01_run_sim.sh
+```
 
 ## Agent 与提示词
 
