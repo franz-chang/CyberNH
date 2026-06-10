@@ -748,7 +748,8 @@ function renderMarkers(snapshot) {
     marker.style.gridColumn = String(worker.tile.x + 1);
     marker.style.gridRow = String(worker.tile.y + 1);
     marker.title = `${worker.id} ${enumLabel("status", worker.status)} F=${worker.fatigue.toFixed(2)}`;
-    marker.textContent = workerShortLabel(worker.id);
+    marker.setAttribute("aria-label", marker.title);
+    marker.append(buildWorkerMarkerVisual(worker));
     marker.addEventListener("click", () => selectMemory(worker.id));
     layer.append(marker);
   }
@@ -764,8 +765,33 @@ function renderMapTelemetry(snapshot) {
 }
 
 function workerShortLabel(workerId) {
-  if (workerId.startsWith("Worker-N")) return workerId.replace("Worker-", "W");
+  if (workerId.startsWith("Worker-N")) return workerId.replace("Worker-", "");
   return workerId.replace("Worker-", "W").replace(/^W0/, "W");
+}
+
+function buildWorkerMarkerVisual(worker) {
+  const shell = document.createElement("span");
+  shell.className = "worker-marker-shell";
+  shell.setAttribute("aria-hidden", "true");
+
+  const shadow = document.createElement("span");
+  shadow.className = "worker-shadow";
+
+  const sprite = document.createElement("span");
+  sprite.className = "worker-sprite";
+
+  for (const partName of ["hat", "head", "body", "apron", "legs"]) {
+    const part = document.createElement("span");
+    part.className = `worker-${partName}`;
+    sprite.append(part);
+  }
+
+  const badge = document.createElement("span");
+  badge.className = "worker-badge";
+  badge.textContent = workerShortLabel(worker.id);
+
+  shell.append(shadow, sprite, badge);
+  return shell;
 }
 
 function renderRuntimeStatus(snapshot) {
