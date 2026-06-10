@@ -44,7 +44,7 @@ const i18n = {
   zh: {
     "actions.run": "运行",
     "actions.pause": "暂停",
-    "actions.step": "单步",
+    "actions.stop": "停止",
     "actions.reset": "重置",
     "actions.done": "完成",
     "actions.export": "导出实验数据",
@@ -61,11 +61,11 @@ const i18n = {
     "map.idleWorkers": "空闲护理员",
     "map.load": "负载",
     "panel.simulationControl": "仿真控制",
+    "panel.scenarioStaffingConfig": "场景与人力配置",
     "panel.scenarioConfig": "场景配置",
     "panel.staffingConfig": "人力配置",
     "panel.residentConfig": "老人配置",
     "panel.demandGeneration": "需求生成",
-    "panel.carePolicy": "照护策略",
     "panel.runtimeStatus": "运行状态",
     "panel.broadcastBoard": "双行广播板",
     "panel.memoryInspector": "Agent 记忆查看",
@@ -120,9 +120,8 @@ const i18n = {
     "option.care.moral_care": "道德照护",
     "option.care.practical_care": "实用照护",
     "option.care.relational_care": "关系照护",
-    "option.decision.rule_only": "仅规则",
-    "option.decision.camel_worker": "Camel Worker-Agent",
-    "option.decision.llm_required": "必须使用 LLM",
+    "option.decision.rule_only": "仅规则驱动",
+    "option.decision.llm_required": "LLM 驱动",
     "legend.corridor": "走廊",
     "legend.room": "房间",
     "legend.nurse": "护士站",
@@ -177,12 +176,13 @@ const i18n = {
     "event.configUpdated": "配置已更新",
     "event.simulationStarted": "仿真已启动",
     "event.simulationPaused": "仿真已暂停",
+    "event.simulationStopped": "仿真已停止",
     "event.serviceStarted": "{id} 服务已开始",
   },
   en: {
     "actions.run": "Run",
     "actions.pause": "Pause",
-    "actions.step": "Step",
+    "actions.stop": "Stop",
     "actions.reset": "Reset",
     "actions.done": "Done",
     "actions.export": "Export data",
@@ -199,11 +199,11 @@ const i18n = {
     "map.idleWorkers": "Idle Workers",
     "map.load": "Load",
     "panel.simulationControl": "Simulation Control",
+    "panel.scenarioStaffingConfig": "Scenario & Staffing Configuration",
     "panel.scenarioConfig": "Scenario Configuration",
     "panel.staffingConfig": "Staffing Configuration",
     "panel.residentConfig": "Resident Configuration",
     "panel.demandGeneration": "Demand Generation",
-    "panel.carePolicy": "Care Policy",
     "panel.runtimeStatus": "Runtime Status",
     "panel.broadcastBoard": "Two-Line Broadcast Board",
     "panel.memoryInspector": "Agent Memory Inspector",
@@ -258,9 +258,8 @@ const i18n = {
     "option.care.moral_care": "Moral Care",
     "option.care.practical_care": "Practical Care",
     "option.care.relational_care": "Relational Care",
-    "option.decision.rule_only": "Rule Only",
-    "option.decision.camel_worker": "Camel Worker-Agent",
-    "option.decision.llm_required": "LLM Required",
+    "option.decision.rule_only": "Rule Only Driven",
+    "option.decision.llm_required": "LLM Driven",
     "legend.corridor": "Corridor",
     "legend.room": "Room",
     "legend.nurse": "Nurse",
@@ -315,6 +314,7 @@ const i18n = {
     "event.configUpdated": "Configuration updated",
     "event.simulationStarted": "Simulation started",
     "event.simulationPaused": "Simulation paused",
+    "event.simulationStopped": "Simulation stopped",
     "event.serviceStarted": "{id} service started",
   },
 };
@@ -477,6 +477,7 @@ function eventMessage(message) {
     "Configuration updated": "event.configUpdated",
     "Simulation started": "event.simulationStarted",
     "Simulation paused": "event.simulationPaused",
+    "Simulation stopped": "event.simulationStopped",
   };
   if (exact[text]) return t(exact[text]);
 
@@ -496,7 +497,7 @@ function bindControls() {
   $("runBtn").addEventListener("click", runSimulation);
   $("headerRunBtn").addEventListener("click", runSimulation);
   $("pauseBtn").addEventListener("click", () => postJson("/api/pause"));
-  $("stepBtn").addEventListener("click", () => postJson("/api/tick"));
+  $("stopBtn").addEventListener("click", () => postJson("/api/stop"));
   $("resetBtn").addEventListener("click", () => postJson("/api/reset", { config: exportSnapshot() }));
   $("manualGenerateBtn").addEventListener("click", () => {
     postJson("/api/manual-demand", { count: numberValue("manualGenerateCountInput", 3) });
@@ -530,6 +531,10 @@ function scheduleConfigSync() {
   }, 180);
 }
 
+function normalizeAgentDecisionMode(value) {
+  return value === "camel_worker" ? "llm_required" : value;
+}
+
 function exportSnapshot() {
   const config = {};
   for (const [id, key, type] of controlBindings) {
@@ -537,7 +542,7 @@ function exportSnapshot() {
     if (!element) continue;
     if (type === "boolean") config[key] = Boolean(element.checked);
     if (type === "number") config[key] = numberValue(id, 0);
-    if (type === "string") config[key] = element.value;
+    if (type === "string") config[key] = key === "agentDecisionMode" ? normalizeAgentDecisionMode(element.value) : element.value;
   }
   return config;
 }
@@ -550,7 +555,7 @@ function applyConfigToControls(config) {
     const element = $(id);
     if (!element || config[key] === undefined) continue;
     if (type === "boolean") element.checked = Boolean(config[key]);
-    else element.value = String(config[key]);
+    else element.value = String(key === "agentDecisionMode" ? normalizeAgentDecisionMode(config[key]) : config[key]);
   }
   app.syncingControls = false;
 }

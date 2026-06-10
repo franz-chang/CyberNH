@@ -51,7 +51,7 @@
           <div class="button-grid">
             <button class="primary" id="runBtn" type="button" data-i18n="actions.run">运行</button>
             <button id="pauseBtn" type="button" data-i18n="actions.pause">暂停</button>
-            <button id="stepBtn" type="button" data-i18n="actions.step">单步</button>
+            <button id="stopBtn" type="button" data-i18n="actions.stop">停止</button>
             <button id="resetBtn" type="button" data-i18n="actions.reset">重置</button>
           </div>
           <button class="wide" id="exportBtn" type="button" data-i18n="actions.export">导出实验数据</button>
@@ -74,96 +74,35 @@
               <option value="1440">1440 min</option>
             </select>
           </label>
-        </section>
-
-        <section class="panel-group scenario-config">
-          <div class="group-title" data-i18n="panel.scenarioConfig">Scenario Configuration</div>
           <label class="field">
-            <span data-i18n="field.peakWindow">高峰窗口</span>
-            <select id="peakWindowSelect">
-              <option value="full_day" data-i18n="option.peak.full_day">Full Day 00:00-24:00</option>
-              <option value="morning_peak" data-i18n="option.peak.morning_peak">Morning Peak 06:30-08:30</option>
-              <option value="midday_peak" data-i18n="option.peak.midday_peak">Midday Peak 10:30-12:30</option>
-              <option value="evening_peak" data-i18n="option.peak.evening_peak">Evening Peak 17:00-19:00</option>
-              <option value="evening_intensive" data-i18n="option.peak.evening_intensive">Evening Intensive 17:00-18:30</option>
+            <span data-i18n="field.careMode">照护模式</span>
+            <select id="careModeSelect">
+              <option value="moral_care" data-i18n="option.care.moral_care">Moral Care</option>
+              <option value="practical_care" selected data-i18n="option.care.practical_care">Practical Care</option>
+              <option value="relational_care" data-i18n="option.care.relational_care">Relational Care</option>
             </select>
           </label>
           <label class="field">
-            <span data-i18n="field.simDays">模拟天数</span>
-            <input id="simulationDaysInput" type="number" value="1" min="1" max="14" />
-          </label>
-          <label class="field">
-            <span data-i18n="field.shift">班次</span>
-            <select id="shiftSelect">
-              <option value="day_shift" data-i18n="option.shift.day_shift">Day Shift</option>
-              <option value="evening_shift" data-i18n="option.shift.evening_shift">Evening Shift</option>
-              <option value="night_shift" data-i18n="option.shift.night_shift">Night Shift</option>
+            <span data-i18n="field.agentDecision">Agent 决策</span>
+            <select id="agentDecisionModeSelect">
+              <option value="rule_only" data-i18n="option.decision.rule_only">Rule Only Driven</option>
+              <option value="llm_required" selected data-i18n="option.decision.llm_required">LLM Driven</option>
             </select>
-          </label>
-          <label class="field">
-            <span data-i18n="field.congestion">拥堵水平</span>
-            <select id="congestionSelect">
-              <option value="low" data-i18n="option.level.low">Low</option>
-              <option value="medium" selected data-i18n="option.level.medium">Medium</option>
-              <option value="high" data-i18n="option.level.high">High</option>
-            </select>
-          </label>
-        </section>
-
-        <section class="panel-group staffing-config">
-          <div class="group-title" data-i18n="panel.staffingConfig">Staffing Configuration</div>
-          <label class="field">
-            <span data-i18n="field.workerCount">Worker 数量</span>
-            <input id="workerCountInput" type="number" value="6" min="2" max="8" />
-          </label>
-          <label class="field">
-            <span data-i18n="field.wingDistribution">楼翼分布</span>
-            <select id="wingDistributionSelect">
-              <option value="balanced" data-i18n="option.wing.balanced">Balanced</option>
-              <option value="wing_a_heavy" data-i18n="option.wing.wing_a_heavy">Wing A Heavy</option>
-              <option value="wing_b_heavy" data-i18n="option.wing.wing_b_heavy">Wing B Heavy</option>
-            </select>
-          </label>
-          <label class="field">
-            <span data-i18n="field.oneToOneDay">一对一日班</span>
-            <input id="oneToOneDayInput" type="number" value="6" min="0" max="8" />
-          </label>
-          <label class="field">
-            <span data-i18n="field.oneToOneFullDay">全日一对一</span>
-            <input id="oneToOneFullDayInput" type="number" value="2" min="0" max="4" />
-          </label>
-          <label class="field">
-            <span data-i18n="field.nightWorkerCount">夜班 Worker</span>
-            <input id="nightWorkerCountInput" type="number" value="2" min="2" max="4" />
-          </label>
-        </section>
-
-        <section class="panel-group senior-config">
-          <div class="group-title" data-i18n="panel.residentConfig">Resident Configuration</div>
-          <label class="field">
-            <span data-i18n="field.seniorCount">Senior 数量</span>
-            <input id="seniorCountInput" type="number" value="40" min="40" max="40" disabled />
-          </label>
-          <label class="field">
-            <span data-i18n="field.careLevel1">Care Level 1</span>
-            <input id="careLevel1RatioInput" type="number" value="40" min="0" max="100" />
-          </label>
-          <label class="field">
-            <span data-i18n="field.careLevel2">Care Level 2</span>
-            <input id="careLevel2RatioInput" type="number" value="35" min="0" max="100" />
-          </label>
-          <label class="field">
-            <span data-i18n="field.careLevel3">Care Level 3</span>
-            <input id="careLevel3RatioInput" type="number" value="25" min="0" max="100" />
           </label>
           <label class="check-field">
-            <input id="autoNormalizeCareLevelToggle" type="checkbox" checked />
-            <span data-i18n="field.autoNormalize">自动归一化</span>
+            <input id="assistantAgentToggle" type="checkbox" checked />
+            <span data-i18n="field.assistantAgent">Assistant-Agent</span>
           </label>
-        </section>
+          <label class="check-field">
+            <input id="seniorAgentLlmToggle" type="checkbox" />
+            <span data-i18n="field.seniorAgentLlm">Senior-Agent LLM</span>
+          </label>
+          <label class="check-field">
+            <input id="workerAgentLlmToggle" type="checkbox" checked />
+            <span data-i18n="field.workerAgentLlm">Worker-Agent LLM</span>
+          </label>
 
-        <section class="panel-group demand-config">
-          <div class="group-title" data-i18n="panel.demandGeneration">Demand Generation</div>
+          <div class="subgroup-title" data-i18n="panel.demandGeneration">Demand Generation</div>
           <label class="field">
             <span data-i18n="field.demandIntensity">需求强度</span>
             <select id="demandIntensitySelect">
@@ -202,35 +141,86 @@
           </label>
         </section>
 
-        <section class="panel-group care-policy">
-          <div class="group-title" data-i18n="panel.carePolicy">Care Policy</div>
+        <section class="panel-group config-combined">
+          <div class="group-title" data-i18n="panel.scenarioStaffingConfig">Scenario & Staffing Configuration</div>
+          <div class="subgroup-title" data-i18n="panel.scenarioConfig">Scenario Configuration</div>
           <label class="field">
-            <span data-i18n="field.careMode">照护模式</span>
-            <select id="careModeSelect">
-              <option value="moral_care" data-i18n="option.care.moral_care">Moral Care</option>
-              <option value="practical_care" selected data-i18n="option.care.practical_care">Practical Care</option>
-              <option value="relational_care" data-i18n="option.care.relational_care">Relational Care</option>
+            <span data-i18n="field.peakWindow">高峰窗口</span>
+            <select id="peakWindowSelect">
+              <option value="full_day" data-i18n="option.peak.full_day">Full Day 00:00-24:00</option>
+              <option value="morning_peak" data-i18n="option.peak.morning_peak">Morning Peak 06:30-08:30</option>
+              <option value="midday_peak" data-i18n="option.peak.midday_peak">Midday Peak 10:30-12:30</option>
+              <option value="evening_peak" data-i18n="option.peak.evening_peak">Evening Peak 17:00-19:00</option>
+              <option value="evening_intensive" data-i18n="option.peak.evening_intensive">Evening Intensive 17:00-18:30</option>
             </select>
           </label>
           <label class="field">
-            <span data-i18n="field.agentDecision">Agent 决策</span>
-            <select id="agentDecisionModeSelect">
-              <option value="rule_only" data-i18n="option.decision.rule_only">Rule Only</option>
-              <option value="camel_worker" data-i18n="option.decision.camel_worker">Camel Worker-Agent</option>
-              <option value="llm_required" selected data-i18n="option.decision.llm_required">LLM Required</option>
+            <span data-i18n="field.simDays">模拟天数</span>
+            <input id="simulationDaysInput" type="number" value="1" min="1" max="14" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.shift">班次</span>
+            <select id="shiftSelect">
+              <option value="day_shift" data-i18n="option.shift.day_shift">Day Shift</option>
+              <option value="evening_shift" data-i18n="option.shift.evening_shift">Evening Shift</option>
+              <option value="night_shift" data-i18n="option.shift.night_shift">Night Shift</option>
             </select>
           </label>
-          <label class="check-field">
-            <input id="assistantAgentToggle" type="checkbox" checked />
-            <span data-i18n="field.assistantAgent">Assistant-Agent</span>
+          <label class="field">
+            <span data-i18n="field.congestion">拥堵水平</span>
+            <select id="congestionSelect">
+              <option value="low" data-i18n="option.level.low">Low</option>
+              <option value="medium" selected data-i18n="option.level.medium">Medium</option>
+              <option value="high" data-i18n="option.level.high">High</option>
+            </select>
+          </label>
+
+          <div class="subgroup-title" data-i18n="panel.staffingConfig">Staffing Configuration</div>
+          <label class="field">
+            <span data-i18n="field.workerCount">Worker 数量</span>
+            <input id="workerCountInput" type="number" value="6" min="2" max="8" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.wingDistribution">楼翼分布</span>
+            <select id="wingDistributionSelect">
+              <option value="balanced" data-i18n="option.wing.balanced">Balanced</option>
+              <option value="wing_a_heavy" data-i18n="option.wing.wing_a_heavy">Wing A Heavy</option>
+              <option value="wing_b_heavy" data-i18n="option.wing.wing_b_heavy">Wing B Heavy</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="field.oneToOneDay">一对一日班</span>
+            <input id="oneToOneDayInput" type="number" value="6" min="0" max="8" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.oneToOneFullDay">全日一对一</span>
+            <input id="oneToOneFullDayInput" type="number" value="2" min="0" max="4" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.nightWorkerCount">夜班 Worker</span>
+            <input id="nightWorkerCountInput" type="number" value="2" min="2" max="4" />
+          </label>
+
+          <div class="subgroup-title" data-i18n="panel.residentConfig">Resident Configuration</div>
+          <label class="field">
+            <span data-i18n="field.seniorCount">Senior 数量</span>
+            <input id="seniorCountInput" type="number" value="40" min="40" max="40" disabled />
+          </label>
+          <label class="field">
+            <span data-i18n="field.careLevel1">Care Level 1</span>
+            <input id="careLevel1RatioInput" type="number" value="40" min="0" max="100" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.careLevel2">Care Level 2</span>
+            <input id="careLevel2RatioInput" type="number" value="35" min="0" max="100" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.careLevel3">Care Level 3</span>
+            <input id="careLevel3RatioInput" type="number" value="25" min="0" max="100" />
           </label>
           <label class="check-field">
-            <input id="seniorAgentLlmToggle" type="checkbox" />
-            <span data-i18n="field.seniorAgentLlm">Senior-Agent LLM</span>
-          </label>
-          <label class="check-field">
-            <input id="workerAgentLlmToggle" type="checkbox" checked />
-            <span data-i18n="field.workerAgentLlm">Worker-Agent LLM</span>
+            <input id="autoNormalizeCareLevelToggle" type="checkbox" checked />
+            <span data-i18n="field.autoNormalize">自动归一化</span>
           </label>
         </section>
 

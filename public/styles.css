@@ -847,8 +847,6 @@ body[data-load="overloaded"] .map-telemetry span:last-child strong {
   padding-right: 2px;
 }
 
-.runtime-status,
-.board-panel,
 .memory-panel,
 .metrics-panel,
 .event-panel {
@@ -879,28 +877,21 @@ body[data-load="overloaded"] .map-telemetry span:last-child strong {
   background: var(--accent);
 }
 
-.scenario-config::before,
+.config-combined::before,
 .metrics-panel::before {
   background: var(--blue);
 }
 
-.staffing-config::before,
 .board-panel::before {
   background: var(--warning);
 }
 
-.senior-config::before,
 .memory-panel::before {
   background: var(--aubergine);
 }
 
-.demand-config::before,
 .event-panel::before {
   background: var(--danger);
-}
-
-.care-policy::before {
-  background: var(--success);
 }
 
 .group-title {
@@ -911,6 +902,17 @@ body[data-load="overloaded"] .map-telemetry span:last-child strong {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 850;
+  text-transform: uppercase;
+}
+
+.subgroup-title {
+  margin: 12px 0 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: #506461;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
 }
 

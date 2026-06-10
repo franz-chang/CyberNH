@@ -530,7 +530,6 @@ const DEFAULT_CONFIG = {
   careMode: "practical_care",
   agentDecisionMode: envChoice("CYBERNH_DEFAULT_AGENT_DECISION_MODE", "llm_required", [
     "rule_only",
-    "camel_worker",
     "llm_required",
   ]),
   workerAgentLlmEnabled: envBoolean("CYBERNH_DEFAULT_WORKER_AGENT_LLM_ENABLED", true),

@@ -114,6 +114,15 @@ class CyberNHSimulation {
     return this.getSnapshot();
   }
 
+  stop() {
+    this.running = false;
+    this.stopTimer();
+    this.state.control = { running: false, paused: false, stopped: true };
+    this.logEvent("control.stop", "info", "Simulation stopped", {});
+    this.publish();
+    return this.getSnapshot();
+  }
+
   restartTimer() {
     this.stopTimer();
     const intervalMs = Math.max(80, 1300 - this.config.simSpeed * 12);
@@ -1371,6 +1380,7 @@ function normalizeConfig(input) {
   config.assistantAgentEnabled = Boolean(config.assistantAgentEnabled);
   config.seniorAgentLlmEnabled = Boolean(config.seniorAgentLlmEnabled);
   config.workerAgentLlmEnabled = Boolean(config.workerAgentLlmEnabled);
+  config.agentDecisionMode = config.agentDecisionMode === "rule_only" ? "rule_only" : "llm_required";
   return config;
 }
 

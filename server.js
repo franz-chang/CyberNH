@@ -60,6 +60,7 @@ wss.on("connection", (ws) => {
       const payload = message.payload || {};
       if (message.type === "control.run") simulation.run(payload.config || {});
       if (message.type === "control.pause") simulation.pause();
+      if (message.type === "control.stop") simulation.stop();
       if (message.type === "control.step") await simulation.tick();
       if (message.type === "control.reset") simulation.reset(payload.config || {});
       if (message.type === "config.update") simulation.updateConfig(payload);
@@ -131,6 +132,11 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/pause") {
     sendJson(res, 200, simulation.pause());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/stop") {
+    sendJson(res, 200, simulation.stop());
     return;
   }
 
