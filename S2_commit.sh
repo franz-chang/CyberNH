@@ -24,6 +24,14 @@ if ! git remote get-url "$REMOTE" >/dev/null 2>&1; then
   git remote add "$REMOTE" "$DEFAULT_REMOTE_URL"
 fi
 
+has_remote_branch() {
+  git ls-remote --exit-code --heads "$REMOTE" "$BRANCH" >/dev/null 2>&1
+}
+
+branch_ahead_behind() {
+  git rev-list --left-right --count HEAD..."$REMOTE/$BRANCH"
+}
+
 if [[ "$RUN_CHECKS" == "1" || "$RUN_CHECKS" == "true" ]]; then
   if [[ -f package.json ]] && command -v npm >/dev/null 2>&1; then
     echo "Running npm checks..."
@@ -31,16 +39,9 @@ if [[ "$RUN_CHECKS" == "1" || "$RUN_CHECKS" == "true" ]]; then
   fi
 
   echo "Checking shell scripts..."
-  for script in 01_run_sim.sh S1_Start_llm.sh L1_listen_queues.sh L2_listen_llm.sh commit.sh; do
-    if [[ -f "$script" ]]; then
-      bash -n "$script"
-    fi
-  done
-fi
-
-if [[ -z "$(git status --porcelain)" ]]; then
-  echo "No changes to commit."
-  exit 0
+  while IFS= read -r script; do
+    bash -n "$script"
+  done < <(find . -path './.git' -prune -o -type f -name '*.sh' -print | sort)
 fi
 
 if [[ "$#" -gt 0 ]]; then
@@ -49,11 +50,44 @@ else
   COMMIT_MESSAGE="Update CyberNH project - $(date '+%Y-%m-%d %H:%M:%S')"
 fi
 
-echo "Staging all changes..."
-git add -A
+WORKTREE_DIRTY=0
+if [[ -n "$(git status --porcelain)" ]]; then
+  WORKTREE_DIRTY=1
+fi
 
-echo "Committing to $BRANCH..."
-git commit -m "$COMMIT_MESSAGE"
+if [[ "$WORKTREE_DIRTY" -eq 1 ]]; then
+  echo "Staging all changes..."
+  git add -A
+
+  echo "Committing to $BRANCH..."
+  git commit -m "$COMMIT_MESSAGE"
+else
+  echo "No new working tree changes to commit."
+fi
+
+if has_remote_branch; then
+  echo "Fetching $REMOTE/$BRANCH..."
+  git fetch "$REMOTE" "$BRANCH"
+
+  read -r AHEAD_COUNT BEHIND_COUNT < <(branch_ahead_behind)
+  if [[ "$BEHIND_COUNT" -gt 0 ]]; then
+    echo "Rebasing local branch onto $REMOTE/$BRANCH..."
+    if ! git rebase "$REMOTE/$BRANCH"; then
+      echo "Error: rebase failed because of conflicts."
+      echo "Resolve conflicts, then run 'git rebase --continue' or cancel with 'git rebase --abort'."
+      exit 1
+    fi
+    read -r AHEAD_COUNT BEHIND_COUNT < <(branch_ahead_behind)
+  fi
+else
+  AHEAD_COUNT="$(git rev-list --count HEAD)"
+  BEHIND_COUNT=0
+fi
+
+if [[ "$AHEAD_COUNT" -eq 0 && "$BEHIND_COUNT" -eq 0 ]]; then
+  echo "No commits to push. Branch is up to date with $REMOTE/$BRANCH."
+  exit 0
+fi
 
 echo "Pushing to $REMOTE/$BRANCH..."
 if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
