@@ -1,0 +1,17 @@
+Producer:        macOS 版本26.5.1（版号25F80） Quartz PDFContext
+CreationDate:    Wed Jun 10 20:46:03 2026 CST
+ModDate:         Wed Jun 10 20:46:03 2026 CST
+Custom Metadata: no
+Metadata Stream: yes
+Tagged:          no
+UserProperties:  no
+Suspects:        no
+Form:            none
+JavaScript:      no
+Pages:           3
+Encrypted:       no
+Page size:       960 x 540 pts
+Page rot:        0
+File size:       65026 bytes
+Optimized:       yes
+PDF version:     1.3

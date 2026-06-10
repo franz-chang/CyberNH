@@ -1,0 +1,16 @@
+{
+  "name": "cyber-nh",
+  "version": "0.1.0",
+  "description": "Cyber-NH multi-agent nursing home simulation dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check src/config.js && node --check src/map.js && node --check src/rng.js && node --check src/llmClient.js && node --check src/simulation.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

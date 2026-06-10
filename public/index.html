@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cyber-NH Multi-Agent Simulation</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-block">
+        <span class="brand-kicker">Cyber-NH Operations Lab</span>
+        <h1>Cyber-NH Multi-Agent Simulation</h1>
+        <p id="headerStatus">Tick 0 / 120 · 06:30 · Normal</p>
+      </div>
+      <div class="header-actions">
+        <div class="language-switch" role="group" aria-label="Language">
+          <button id="langZhBtn" class="lang-option active" type="button" data-lang="zh">中文</button>
+          <button id="langEnBtn" class="lang-option" type="button" data-lang="en">English</button>
+        </div>
+        <span id="connectionBadge" class="badge muted">Connecting</span>
+        <button id="headerStepBtn" type="button" data-i18n="actions.step">单步</button>
+        <button id="headerRunBtn" class="primary" type="button" data-i18n="actions.run">运行</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="map-panel" aria-label="Map View">
+        <div class="map-toolbar">
+          <div>
+            <span class="section-kicker" data-i18n="map.kicker">Live Floor Plate</span>
+            <strong data-i18n="map.title">Map View</strong>
+            <span id="mapSubtitle" data-i18n="map.subtitle">Original CyberNH_GUI Map · 40 Rooms · 35×25</span>
+          </div>
+          <div id="mapLegend" class="legend"></div>
+        </div>
+        <div class="map-stage">
+          <div id="gridLayer" class="grid-layer"></div>
+          <div id="markerLayer" class="marker-layer"></div>
+        </div>
+        <div class="map-telemetry" aria-label="Map telemetry">
+          <span><span data-i18n="map.pending">Pending</span> <strong id="mapPendingCount">0</strong></span>
+          <span><span data-i18n="map.active">Active</span> <strong id="mapActiveCount">0</strong></span>
+          <span><span data-i18n="map.idleWorkers">Idle Workers</span> <strong id="mapIdleWorkerCount">0</strong></span>
+          <span><span data-i18n="map.load">Load</span> <strong id="mapLoadState">Low</strong></span>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="panel-group simulation-control">
+          <div class="group-title" data-i18n="panel.simulationControl">Simulation Control</div>
+          <div class="button-grid">
+            <button class="primary" id="runBtn" type="button" data-i18n="actions.run">运行</button>
+            <button id="pauseBtn" type="button" data-i18n="actions.pause">暂停</button>
+            <button id="stepBtn" type="button" data-i18n="actions.step">单步</button>
+            <button id="resetBtn" type="button" data-i18n="actions.reset">重置</button>
+          </div>
+          <button class="wide" id="exportBtn" type="button" data-i18n="actions.export">导出实验数据</button>
+          <label class="field">
+            <span data-i18n="field.simSpeed">仿真速度</span>
+            <input id="simSpeedRange" type="range" min="1" max="100" value="40" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.randomSeed">随机种子</span>
+            <input id="randomSeedInput" type="number" value="42" min="0" max="999999" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.duration">观察窗口</span>
+            <select id="durationSelect">
+              <option value="60">60 min</option>
+              <option value="90">90 min</option>
+              <option value="120" selected>120 min</option>
+              <option value="180">180 min</option>
+              <option value="240">240 min</option>
+              <option value="1440">1440 min</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="panel-group scenario-config">
+          <div class="group-title" data-i18n="panel.scenarioConfig">Scenario Configuration</div>
+          <label class="field">
+            <span data-i18n="field.peakWindow">高峰窗口</span>
+            <select id="peakWindowSelect">
+              <option value="full_day" data-i18n="option.peak.full_day">Full Day 00:00-24:00</option>
+              <option value="morning_peak" data-i18n="option.peak.morning_peak">Morning Peak 06:30-08:30</option>
+              <option value="midday_peak" data-i18n="option.peak.midday_peak">Midday Peak 10:30-12:30</option>
+              <option value="evening_peak" data-i18n="option.peak.evening_peak">Evening Peak 17:00-19:00</option>
+              <option value="evening_intensive" data-i18n="option.peak.evening_intensive">Evening Intensive 17:00-18:30</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="field.simDays">模拟天数</span>
+            <input id="simulationDaysInput" type="number" value="1" min="1" max="14" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.shift">班次</span>
+            <select id="shiftSelect">
+              <option value="day_shift" data-i18n="option.shift.day_shift">Day Shift</option>
+              <option value="evening_shift" data-i18n="option.shift.evening_shift">Evening Shift</option>
+              <option value="night_shift" data-i18n="option.shift.night_shift">Night Shift</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="field.congestion">拥堵水平</span>
+            <select id="congestionSelect">
+              <option value="low" data-i18n="option.level.low">Low</option>
+              <option value="medium" selected data-i18n="option.level.medium">Medium</option>
+              <option value="high" data-i18n="option.level.high">High</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="field.layout">布局</span>
+            <select id="layoutSelect" disabled>
+              <option value="u_shape_40_rooms">u_shape_40_rooms</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="panel-group staffing-config">
+          <div class="group-title" data-i18n="panel.staffingConfig">Staffing Configuration</div>
+          <label class="field">
+            <span data-i18n="field.workerCount">Worker 数量</span>
+            <input id="workerCountInput" type="number" value="6" min="2" max="8" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.wingDistribution">楼翼分布</span>
+            <select id="wingDistributionSelect">
+              <option value="balanced" data-i18n="option.wing.balanced">Balanced</option>
+              <option value="wing_a_heavy" data-i18n="option.wing.wing_a_heavy">Wing A Heavy</option>
+              <option value="wing_b_heavy" data-i18n="option.wing.wing_b_heavy">Wing B Heavy</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="field.oneToOneDay">一对一日班</span>
+            <input id="oneToOneDayInput" type="number" value="6" min="0" max="8" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.oneToOneFullDay">全日一对一</span>
+            <input id="oneToOneFullDayInput" type="number" value="2" min="0" max="4" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.nightWorkerCount">夜班 Worker</span>
+            <input id="nightWorkerCountInput" type="number" value="2" min="2" max="4" />
+          </label>
+        </section>
+
+        <section class="panel-group senior-config">
+          <div class="group-title" data-i18n="panel.residentConfig">Resident Configuration</div>
+          <label class="field">
+            <span data-i18n="field.seniorCount">Senior 数量</span>
+            <input id="seniorCountInput" type="number" value="40" min="40" max="40" disabled />
+          </label>
+          <label class="field">
+            <span data-i18n="field.careLevel1">Care Level 1</span>
+            <input id="careLevel1RatioInput" type="number" value="40" min="0" max="100" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.careLevel2">Care Level 2</span>
+            <input id="careLevel2RatioInput" type="number" value="35" min="0" max="100" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.careLevel3">Care Level 3</span>
+            <input id="careLevel3RatioInput" type="number" value="25" min="0" max="100" />
+          </label>
+          <label class="check-field">
+            <input id="autoNormalizeCareLevelToggle" type="checkbox" checked />
+            <span data-i18n="field.autoNormalize">自动归一化</span>
+          </label>
+        </section>
+
+        <section class="panel-group demand-config">
+          <div class="group-title" data-i18n="panel.demandGeneration">Demand Generation</div>
+          <label class="field">
+            <span data-i18n="field.demandIntensity">需求强度</span>
+            <select id="demandIntensitySelect">
+              <option value="low" data-i18n="option.level.low">Low</option>
+              <option value="medium" selected data-i18n="option.level.medium">Medium</option>
+              <option value="high" data-i18n="option.level.high">High</option>
+              <option value="overcooked" data-i18n="option.level.overcooked">Overcooked Stress Test</option>
+            </select>
+          </label>
+          <div class="inline-action">
+            <label class="field compact">
+              <span data-i18n="field.manualCount">手动数量</span>
+              <input id="manualGenerateCountInput" type="number" value="3" min="1" max="8" />
+            </label>
+            <button id="manualGenerateBtn" type="button" data-i18n="actions.generateDemand">生成需求</button>
+          </div>
+          <label class="field">
+            <span data-i18n="field.escalationThreshold">升级阈值</span>
+            <input id="escalationThresholdInput" type="number" value="10" min="8" max="12" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.maxPendingDemand">最大等待需求</span>
+            <input id="maxPendingDemandInput" type="number" value="10" min="3" max="20" />
+          </label>
+          <label class="field">
+            <span data-i18n="field.maxActiveTask">最大活跃任务</span>
+            <input id="maxActiveTaskInput" type="number" value="6" min="1" max="8" />
+          </label>
+          <label class="check-field">
+            <input id="twoPersonTaskToggle" type="checkbox" checked />
+            <span data-i18n="field.twoPersonTask">双人任务</span>
+          </label>
+          <label class="check-field">
+            <input id="interruptionToggle" type="checkbox" checked />
+            <span data-i18n="field.interruption">任务中断</span>
+          </label>
+        </section>
+
+        <section class="panel-group care-policy">
+          <div class="group-title" data-i18n="panel.carePolicy">Care Policy</div>
+          <label class="field">
+            <span data-i18n="field.careMode">照护模式</span>
+            <select id="careModeSelect">
+              <option value="moral_care" data-i18n="option.care.moral_care">Moral Care</option>
+              <option value="practical_care" selected data-i18n="option.care.practical_care">Practical Care</option>
+              <option value="relational_care" data-i18n="option.care.relational_care">Relational Care</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="field.agentDecision">Agent 决策</span>
+            <select id="agentDecisionModeSelect">
+              <option value="rule_only" data-i18n="option.decision.rule_only">Rule Only</option>
+              <option value="camel_worker" data-i18n="option.decision.camel_worker">Camel Worker-Agent</option>
+              <option value="llm_required" selected data-i18n="option.decision.llm_required">LLM Required</option>
+            </select>
+          </label>
+          <label class="check-field">
+            <input id="assistantAgentToggle" type="checkbox" checked />
+            <span data-i18n="field.assistantAgent">Assistant-Agent</span>
+          </label>
+          <label class="check-field">
+            <input id="seniorAgentLlmToggle" type="checkbox" />
+            <span data-i18n="field.seniorAgentLlm">Senior-Agent LLM</span>
+          </label>
+          <label class="check-field">
+            <input id="workerAgentLlmToggle" type="checkbox" checked />
+            <span data-i18n="field.workerAgentLlm">Worker-Agent LLM</span>
+          </label>
+        </section>
+
+        <section class="panel-group runtime-status">
+          <div class="group-title" data-i18n="panel.runtimeStatus">Runtime Status</div>
+          <dl id="runtimeStatusList"></dl>
+        </section>
+
+        <section class="panel-group board-panel">
+          <div class="group-title" data-i18n="panel.broadcastBoard">Two-Line Broadcast Board</div>
+          <div class="board-row">
+            <strong data-i18n="board.seniorDemandRow">Senior Demand Row</strong>
+            <ol id="seniorDemandRow"></ol>
+          </div>
+          <div class="board-row">
+            <strong data-i18n="board.workerResourceRow">Worker Resource Row</strong>
+            <ol id="workerResourceRow"></ol>
+          </div>
+          <div id="assistantBroadcast" class="assistant-line">Assistant: Normal load</div>
+        </section>
+
+        <section class="panel-group memory-panel">
+          <div class="group-title" data-i18n="panel.memoryInspector">Agent Memory Inspector</div>
+          <div class="memory-toolbar">
+            <select id="memoryAgentSelect"></select>
+            <button id="memoryRefreshBtn" type="button" data-i18n="actions.read">读取</button>
+          </div>
+          <pre id="memoryView">{}</pre>
+        </section>
+
+        <section class="panel-group metrics-panel">
+          <div class="group-title" data-i18n="panel.metricsDashboard">Metrics Dashboard</div>
+          <dl id="metricsList"></dl>
+        </section>
+
+        <section class="panel-group event-panel">
+          <div class="group-title" data-i18n="panel.eventLog">Event Log</div>
+          <ol id="eventLog"></ol>
+        </section>
+      </aside>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

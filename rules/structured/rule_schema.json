@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cyber-NH Rule Data Asset",
+  "description": "Schema family for turning PDF rules into auditable rules, metrics, and fine-tuning examples.",
+  "rule_object": {
+    "type": "object",
+    "required": [
+      "rule_id",
+      "source",
+      "section",
+      "page",
+      "category",
+      "actor",
+      "trigger",
+      "condition",
+      "action",
+      "priority",
+      "enforcement",
+      "implementation_hint"
+    ],
+    "properties": {
+      "rule_id": { "type": "string" },
+      "source": { "type": "string" },
+      "section": { "type": "string" },
+      "page": { "type": "integer", "minimum": 1 },
+      "category": {
+        "type": "string",
+        "enum": ["preemption", "task_probability", "coordination", "workload", "metric_requirement"]
+      },
+      "actor": {
+        "type": "string",
+        "enum": ["system", "senior_agent", "worker_agent", "assistant_agent", "metrics_pipeline"]
+      },
+      "trigger": { "type": "string" },
+      "condition": { "type": "string" },
+      "action": { "type": "string" },
+      "constraints": { "type": "array", "items": { "type": "string" } },
+      "parameters": { "type": "object" },
+      "priority": { "type": "integer", "minimum": 0, "maximum": 100 },
+      "enforcement": {
+        "type": "string",
+        "enum": ["hard", "soft", "measurement"]
+      },
+      "implementation_hint": { "type": "string" },
+      "test_cases": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["input", "expected"],
+          "properties": {
+            "input": { "type": "object" },
+            "expected": { "type": "object" }
+          }
+        }
+      }
+    }
+  },
+  "metric_object": {
+    "type": "object",
+    "required": [
+      "metric_id",
+      "source",
+      "section",
+      "page",
+      "name",
+      "category",
+      "definition",
+      "unit",
+      "formula",
+      "aggregation_level"
+    ],
+    "properties": {
+      "metric_id": { "type": "string" },
+      "source": { "type": "string" },
+      "section": { "type": "string" },
+      "page": { "type": "integer", "minimum": 1 },
+      "name": { "type": "string" },
+      "category": {
+        "type": "string",
+        "enum": ["resident_side", "caregiver_side", "system_side"]
+      },
+      "definition": { "type": "string" },
+      "unit": { "type": "string" },
+      "formula": { "type": "string" },
+      "aggregation_level": { "type": "string" },
+      "event_fields_required": { "type": "array", "items": { "type": "string" } }
+    }
+  },
+  "fine_tune_seed_object": {
+    "type": "object",
+    "required": ["example_id", "rule_ids", "messages"],
+    "properties": {
+      "example_id": { "type": "string" },
+      "rule_ids": { "type": "array", "items": { "type": "string" } },
+      "messages": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["role", "content"],
+          "properties": {
+            "role": { "type": "string", "enum": ["system", "user", "assistant"] },
+            "content": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

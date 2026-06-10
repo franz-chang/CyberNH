@@ -1,0 +1,14 @@
+Scripts说明：
+
+1. 01_run_sim.sh: 模拟开启总启动脚本
+2. L1_listen_queues.sh： 队列监听口，看队列状态
+3. L2_listen_llm.sh： LLM监听口，看LLM当前输入输出
+4. S1_Start_llm.sh： 分段检查，只启动LLM
+
+LLM运行目录已移出本项目，默认位置：
+
+/Users/chongzhang/CyberNH-LLM
+
+如需放到其他位置，可在运行脚本时设置：
+
+CYBERNH_LLM_DIR=/absolute/path/to/CyberNH-LLM ./S1_Start_llm.sh
