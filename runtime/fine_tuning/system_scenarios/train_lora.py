@@ -36,6 +36,8 @@ class TrainConfig:
     device: str
     dtype: str
     seed: int
+    manifest_task: str
+    manifest_file: str
 
 
 class ScenarioDataset(Dataset):
@@ -104,6 +106,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default=os.getenv("CYBERNH_LLM_DEVICE", "auto"))
     parser.add_argument("--dtype", default=os.getenv("CYBERNH_LLM_DTYPE", "auto"))
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--manifest-task", default="CyberNH system scenario prompt compression")
+    parser.add_argument("--manifest-file", default="cybernh_system_scenarios_manifest.json")
+    parser.add_argument("--manifest-extra-json", default=None, help="Optional JSON object merged into the adapter manifest.")
     parser.add_argument("--dry-run", action="store_true", help="Validate data and tokenization without loading the model.")
     return parser.parse_args()
 
@@ -212,11 +217,18 @@ def evaluate_loss(model: torch.nn.Module, loader: DataLoader, device: torch.devi
     return sum(losses) / max(1, len(losses))
 
 
-def write_manifest(output_dir: Path, config: TrainConfig, train_count: int, eval_count: int, final_loss: float | None) -> None:
+def write_manifest(
+    output_dir: Path,
+    config: TrainConfig,
+    train_count: int,
+    eval_count: int,
+    final_loss: float | None,
+    manifest_extra: dict[str, Any] | None = None,
+) -> None:
     manifest = {
         "created_at": int(time.time()),
         "adapter_type": "lora",
-        "task": "CyberNH system scenario prompt compression",
+        "task": config.manifest_task,
         "scenario_map": {
             "[System Scenario 1]": "Worker-Agent",
             "[System Scenario 2]": "Senior-Agent",
@@ -227,7 +239,9 @@ def write_manifest(output_dir: Path, config: TrainConfig, train_count: int, eval
         "final_eval_loss": final_loss,
         "config": asdict(config),
     }
-    (output_dir / "cybernh_system_scenarios_manifest.json").write_text(
+    if manifest_extra:
+        manifest.update(manifest_extra)
+    (output_dir / config.manifest_file).write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -252,7 +266,10 @@ def main() -> int:
         device=args.device,
         dtype=args.dtype,
         seed=args.seed,
+        manifest_task=args.manifest_task,
+        manifest_file=args.manifest_file,
     )
+    manifest_extra = json.loads(args.manifest_extra_json) if args.manifest_extra_json else None
 
     seed_everything(args.seed)
     train_records = load_records(args.train_file)
@@ -367,7 +384,7 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(output_dir)
     processor.save_pretrained(output_dir)
-    write_manifest(output_dir, config, len(train_records), len(eval_records), final_eval_loss)
+    write_manifest(output_dir, config, len(train_records), len(eval_records), final_eval_loss, manifest_extra)
     print(f"saved_adapter={output_dir}")
     return 0
 
