@@ -9,6 +9,7 @@ venv/
 .env
 .env.*
 !.env.example
+config/deepseek.env
 runtime/logs/
 runtime/*.pid
 runtime/fine_tuning/**/outputs/

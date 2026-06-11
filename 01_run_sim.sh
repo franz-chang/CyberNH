@@ -88,6 +88,10 @@ prompt_mode_uses_aliases() {
 }
 
 should_require_scenario_adapter() {
+  if uses_deepseek_api; then
+    return 1
+  fi
+
   case "$REQUIRE_SCENARIO_ADAPTER" in
     1|true|True|TRUE|yes|Yes|YES|on|On|ON)
       return 0
@@ -104,6 +108,10 @@ should_require_scenario_adapter() {
       exit 1
       ;;
   esac
+}
+
+uses_deepseek_api() {
+  [[ "${CYBERNH_DEFAULT_AGENT_DECISION_MODE:-llm_required}" == "deepseek_api" ]]
 }
 
 llm_endpoint_ready() {
@@ -231,6 +239,14 @@ wait_for_llm_endpoint() {
 }
 
 start_llm_if_needed() {
+  if uses_deepseek_api; then
+    echo "DeepSeek API decision mode enabled; skipping local LLM startup."
+    if [[ -z "${CYBERNH_DEEPSEEK_API_KEY:-}" ]]; then
+      echo "Warning: CYBERNH_DEEPSEEK_API_KEY is not set. DeepSeek requests will fail until it is configured."
+    fi
+    return
+  fi
+
   if llm_endpoint_ready; then
     echo "LLM endpoint is already reachable: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
     return
@@ -287,6 +303,10 @@ if [[ ! -d node_modules ]]; then
 fi
 
 load_env_defaults "$LLM_DIR/.env"
+load_env_defaults "$ROOT_DIR/config/deepseek.env"
+PROMPT_MODE="${CYBERNH_SYSTEM_PROMPT_MODE:-scenario_alias}"
+REQUIRE_SCENARIO_ADAPTER="${CYBERNH_REQUIRE_SCENARIO_ADAPTER:-auto}"
+LLM_START_MODE="${CYBERNH_START_LLM:-auto}"
 
 trap cleanup EXIT INT TERM
 start_llm_if_needed
@@ -297,8 +317,14 @@ export PORT
 
 echo "Starting Cyber-NH from: $ROOT_DIR"
 echo "Dashboard URL: http://localhost:$PORT"
-echo "LLM endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
-echo "LLM model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
+if uses_deepseek_api; then
+  echo "LLM provider: DeepSeek API"
+  echo "LLM endpoint: ${CYBERNH_DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
+  echo "LLM model: ${CYBERNH_DEEPSEEK_MODEL:-deepseek-v4-flash}"
+else
+  echo "LLM endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
+  echo "LLM model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
+fi
 echo "System prompt mode: $PROMPT_MODE"
 echo "LLM start mode: $LLM_START_MODE"
 echo "Press Ctrl+C to stop."

@@ -4,10 +4,11 @@ const path = require("path");
 const { WebSocketServer } = require("ws");
 
 loadEnvFile(path.join(__dirname, "LLM", ".env"));
+loadEnvFile(path.join(__dirname, "config", "deepseek.env"));
 loadEnvFile(path.join(__dirname, ".env"));
 
 const { CyberNHSimulation } = require("./src/simulation");
-const { loadLlmConfig } = require("./src/llmClient");
+const { loadLlmConfig, publicLlmConfig } = require("./src/llmClient");
 const {
   DEFAULT_CONFIG,
   LAYOUT_CONFIG,
@@ -81,7 +82,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/llm/config") {
-    sendJson(res, 200, loadLlmConfig());
+    sendJson(res, 200, publicLlmConfig(loadLlmConfig({ decisionMode: simulation.getSnapshot().config.agentDecisionMode })));
     return;
   }
 

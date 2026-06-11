@@ -531,6 +531,7 @@ const DEFAULT_CONFIG = {
   agentDecisionMode: envChoice("CYBERNH_DEFAULT_AGENT_DECISION_MODE", "llm_required", [
     "rule_only",
     "llm_required",
+    "deepseek_api",
   ]),
   workerAgentLlmEnabled: envBoolean("CYBERNH_DEFAULT_WORKER_AGENT_LLM_ENABLED", true),
   seniorAgentLlmEnabled: envBoolean("CYBERNH_DEFAULT_SENIOR_AGENT_LLM_ENABLED", false),

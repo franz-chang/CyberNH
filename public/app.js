@@ -121,7 +121,8 @@ const i18n = {
     "option.care.practical_care": "实用照护",
     "option.care.relational_care": "关系照护",
     "option.decision.rule_only": "仅规则驱动",
-    "option.decision.llm_required": "LLM 驱动",
+    "option.decision.llm_required": "本地 Qwen 驱动",
+    "option.decision.deepseek_api": "DeepSeek API 驱动",
     "legend.corridor": "走廊",
     "legend.room": "房间",
     "legend.nurse": "护士站",
@@ -259,7 +260,8 @@ const i18n = {
     "option.care.practical_care": "Practical Care",
     "option.care.relational_care": "Relational Care",
     "option.decision.rule_only": "Rule Only Driven",
-    "option.decision.llm_required": "LLM Driven",
+    "option.decision.llm_required": "Local Qwen Driven",
+    "option.decision.deepseek_api": "DeepSeek API Driven",
     "legend.corridor": "Corridor",
     "legend.room": "Room",
     "legend.nurse": "Nurse",
@@ -732,11 +734,12 @@ function renderMarkers(snapshot) {
   for (const senior of seniors) {
     const marker = document.createElement("button");
     marker.type = "button";
-    marker.className = `marker senior ${senior.currentStatus} care-level-${senior.careLevel}`;
+    marker.className = `marker senior ${senior.currentStatus} care-level-${senior.careLevel} ${seniorAvatarKind(senior.id)}`;
     marker.style.gridColumn = String(senior.tile.x + 1);
     marker.style.gridRow = String(senior.tile.y + 1);
     marker.title = `${senior.id} ${senior.room} ${app.language === "zh" ? "护理等级" : "Care Level"} ${senior.careLevel}`;
-    marker.textContent = senior.currentStatus === "idle" ? "" : `L${senior.careLevel}`;
+    marker.setAttribute("aria-label", marker.title);
+    marker.append(buildSeniorMarkerVisual(senior));
     marker.addEventListener("click", () => selectMemory(senior.id));
     layer.append(marker);
   }
@@ -767,6 +770,36 @@ function renderMapTelemetry(snapshot) {
 function workerShortLabel(workerId) {
   if (workerId.startsWith("Worker-N")) return workerId.replace("Worker-", "");
   return workerId.replace("Worker-", "W").replace(/^W0/, "W");
+}
+
+function seniorAvatarKind(seniorId) {
+  const match = String(seniorId || "").match(/(\d+)$/);
+  return Number(match?.[1] || 1) % 2 === 0 ? "grandma" : "grandpa";
+}
+
+function buildSeniorMarkerVisual(senior) {
+  const shell = document.createElement("span");
+  shell.className = "senior-marker-shell";
+  shell.setAttribute("aria-hidden", "true");
+
+  const shadow = document.createElement("span");
+  shadow.className = "senior-shadow";
+
+  const sprite = document.createElement("span");
+  sprite.className = "senior-sprite";
+
+  for (const partName of ["hair", "head", "face", "body", "trim", "legs", "cane"]) {
+    const part = document.createElement("span");
+    part.className = `senior-${partName}`;
+    sprite.append(part);
+  }
+
+  const badge = document.createElement("span");
+  badge.className = "senior-badge";
+  badge.textContent = senior.currentStatus === "idle" ? "" : `L${senior.careLevel}`;
+
+  shell.append(shadow, sprite, badge);
+  return shell;
 }
 
 function buildWorkerMarkerVisual(worker) {
@@ -802,6 +835,7 @@ function renderRuntimeStatus(snapshot) {
   const active = metrics.activeDemandCount || 0;
   const equipmentBars = renderEquipmentBars(equipment);
   const rows = [
+    [t("status.equipment"), { html: equipmentBars, className: "equipment-status-cell", labelClassName: "equipment-status-label" }],
     [t("status.tick"), `${snapshot.tick} / ${snapshot.config.totalDurationTicks || snapshot.config.durationTicks}`],
     [t("status.simulationDay"), `${snapshot.simulationDay || 1} / ${snapshot.config.simulationDays || 1}`],
     [t("status.simulationTime"), snapshot.currentTime],
@@ -814,13 +848,13 @@ function renderRuntimeStatus(snapshot) {
     [t("status.movingWorkers"), workers.filter((worker) => worker.status === "moving").length],
     [t("status.servingWorkers"), workers.filter((worker) => worker.status === "serving").length],
     [t("status.unavailableWorkers"), workers.filter((worker) => worker.status === "unavailable").length],
-    [t("status.equipment"), { html: equipmentBars, className: "equipment-status-cell" }],
   ];
   $("runtimeStatusList").innerHTML = rows
     .map(([key, value]) => {
       if (typeof value === "object" && value?.html !== undefined) {
         const className = value.className ? ` class="${escapeHtml(value.className)}"` : "";
-        return `<dt>${escapeHtml(key)}</dt><dd${className}>${value.html}</dd>`;
+        const labelClassName = value.labelClassName ? ` class="${escapeHtml(value.labelClassName)}"` : "";
+        return `<dt${labelClassName}>${escapeHtml(key)}</dt><dd${className}>${value.html}</dd>`;
       }
       return `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd>`;
     })

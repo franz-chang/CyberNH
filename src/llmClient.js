@@ -4,6 +4,7 @@ const path = require("path");
 const PROMPT_MODE_ENV = "CYBERNH_SYSTEM_PROMPT_MODE";
 const ALIAS_PROMPT_MODES = new Set(["alias", "aliases", "scenario", "scenario_alias", "short"]);
 const FULL_PROMPT_MODES = new Set(["full", "legacy", "long"]);
+const DEEPSEEK_DECISION_MODE = "deepseek_api";
 
 const ACTIONS = new Set([
   "accept_task",
@@ -15,21 +16,56 @@ const ACTIONS = new Set([
   "finish",
 ]);
 
-function loadLlmConfig() {
+function envNumber(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function envBoolean(name, fallback) {
+  const value = process.env[name];
+  if (value === undefined) return fallback;
+  return /^(1|true|yes|on)$/i.test(value);
+}
+
+function isDeepSeekMode(options = {}) {
+  return (
+    options.decisionMode === DEEPSEEK_DECISION_MODE ||
+    process.env.CYBERNH_DEFAULT_AGENT_DECISION_MODE === DEEPSEEK_DECISION_MODE ||
+    String(options.provider || process.env.CYBERNH_LLM_PROVIDER || "").toLowerCase() === "deepseek"
+  );
+}
+
+function loadLlmConfig(options = {}) {
+  if (isDeepSeekMode(options)) {
+    return {
+      provider: "deepseek",
+      model: process.env.CYBERNH_DEEPSEEK_MODEL || "deepseek-v4-flash",
+      baseUrl: process.env.CYBERNH_DEEPSEEK_BASE_URL || "https://api.deepseek.com",
+      apiKey: process.env.CYBERNH_DEEPSEEK_API_KEY || "",
+      temperature: envNumber("CYBERNH_DEEPSEEK_TEMPERATURE", 0),
+      maxTokens: envNumber("CYBERNH_DEEPSEEK_MAX_TOKENS", 512),
+      timeoutSeconds: envNumber("CYBERNH_DEEPSEEK_TIMEOUT_SECONDS", 120),
+      jsonMode: envBoolean("CYBERNH_DEEPSEEK_JSON_MODE", true),
+      thinking: process.env.CYBERNH_DEEPSEEK_THINKING || "disabled",
+      forceFullSystemPrompt: true,
+    };
+  }
+
   return {
     provider: process.env.CYBERNH_LLM_PROVIDER || "modelscope-transformers",
     model: process.env.CYBERNH_LLM_MODEL || "qwen3-vl-2b-instruct",
     baseUrl: process.env.CYBERNH_LLM_BASE_URL || "http://localhost:8000/v1",
     apiKey: process.env.CYBERNH_LLM_API_KEY || "EMPTY",
-    temperature: Number(process.env.CYBERNH_LLM_TEMPERATURE || "0"),
-    maxTokens: Number(process.env.CYBERNH_LLM_MAX_TOKENS || "512"),
-    timeoutSeconds: Number(process.env.CYBERNH_LLM_TIMEOUT_SECONDS || "120"),
-    jsonMode: String(process.env.CYBERNH_LLM_JSON_MODE || "true").toLowerCase() === "true",
+    temperature: envNumber("CYBERNH_LLM_TEMPERATURE", 0),
+    maxTokens: envNumber("CYBERNH_LLM_MAX_TOKENS", 512),
+    timeoutSeconds: envNumber("CYBERNH_LLM_TIMEOUT_SECONDS", 120),
+    jsonMode: envBoolean("CYBERNH_LLM_JSON_MODE", true),
+    forceFullSystemPrompt: false,
   };
 }
 
-async function decideWorkerWithLlm(observation) {
-  const cfg = loadLlmConfig();
+async function decideWorkerWithLlm(observation, options = {}) {
+  const cfg = loadLlmConfig(options);
   const requestPayload = buildRequestPayload(cfg, observation);
 
   try {
@@ -79,6 +115,14 @@ async function decideWorkerWithLlm(observation) {
 }
 
 async function completeOnce(cfg, requestPayload) {
+  if (cfg.provider === "deepseek" && !cfg.apiKey) {
+    return {
+      ok: false,
+      rawReply: null,
+      error: "CYBERNH_DEEPSEEK_API_KEY is required for DeepSeek API mode",
+    };
+  }
+
   const endpoint = `${cfg.baseUrl.replace(/\/+$/, "")}/chat/completions`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Math.max(1, cfg.timeoutSeconds) * 1000);
@@ -124,7 +168,7 @@ function buildRequestPayload(cfg, observation) {
   const messages = [
     {
       role: "system",
-      content: loadWorkerSystemPrompt(observation.agentId),
+      content: loadWorkerSystemPrompt(observation.agentId, cfg),
     },
     {
       role: "user",
@@ -141,6 +185,10 @@ function buildRequestPayload(cfg, observation) {
             "If no candidate demand is suitable, use action=reject_all and target_demand_id=null.",
           ],
           allowed_target_demand_ids: (llmObservation.candidateDemands || []).map((demand) => demand.demandId),
+          metadata: {
+            provider: cfg.provider,
+            prompt_mode: cfg.forceFullSystemPrompt ? "full_system_prompt" : "configured",
+          },
           observation: llmObservation,
         },
         null,
@@ -155,6 +203,9 @@ function buildRequestPayload(cfg, observation) {
     max_tokens: cfg.maxTokens,
   };
   if (cfg.jsonMode) payload.response_format = { type: "json_object" };
+  if (cfg.provider === "deepseek" && cfg.thinking && cfg.thinking !== "default") {
+    payload.thinking = { type: cfg.thinking };
+  }
   return payload;
 }
 
@@ -204,8 +255,8 @@ function parseDecisionContent(content, observation) {
   return normalizeDecision(JSON.parse(extractJsonObject(stripJsonFence(content))), observation);
 }
 
-function loadWorkerSystemPrompt(agentId) {
-  const alias = loadScenarioPromptAlias("Worker-Agent");
+function loadWorkerSystemPrompt(agentId, cfg = {}) {
+  const alias = cfg.forceFullSystemPrompt ? null : loadScenarioPromptAlias("Worker-Agent");
   if (alias) return alias;
 
   const promptPath = path.join(__dirname, "..", "runtime", "prompts", "worker_agent.system.md");
@@ -373,14 +424,19 @@ function publicConfig(cfg) {
     provider: cfg.provider,
     model: cfg.model,
     baseUrl: cfg.baseUrl,
+    apiKeyConfigured: Boolean(cfg.apiKey),
     temperature: cfg.temperature,
     maxTokens: cfg.maxTokens,
     timeoutSeconds: cfg.timeoutSeconds,
     jsonMode: cfg.jsonMode,
+    thinking: cfg.thinking,
+    promptMode: cfg.forceFullSystemPrompt ? "full_system_prompt" : "configured",
   };
 }
 
 module.exports = {
   decideWorkerWithLlm,
   loadLlmConfig,
+  publicLlmConfig: publicConfig,
+  DEEPSEEK_DECISION_MODE,
 };

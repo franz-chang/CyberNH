@@ -100,7 +100,41 @@ CYBERNH_LLM_API_KEY=EMPTY \
 ./01_run_sim.sh
 ```
 
-### 3. 只启动本地 LLM
+### 3. 使用 DeepSeek API 驱动 Agent 决策
+
+DeepSeek API 分支不依赖本地 LoRA / adapter，因此项目会为 Worker-Agent 发送完整 `runtime/prompts/worker_agent.system.md`，而不是短标记 System Scenario。
+
+DeepSeek 参数文件位于：
+
+```text
+config/deepseek.env
+```
+
+填入 API key 后直接启动：
+
+```bash
+./01_run_sim.sh
+```
+
+参数文件内容示例：
+
+```bash
+CYBERNH_DEFAULT_AGENT_DECISION_MODE=deepseek_api
+CYBERNH_DEEPSEEK_API_KEY=sk-...
+CYBERNH_DEEPSEEK_BASE_URL=https://api.deepseek.com
+CYBERNH_DEEPSEEK_MODEL=deepseek-v4-flash
+CYBERNH_DEEPSEEK_TEMPERATURE=0
+CYBERNH_DEEPSEEK_MAX_TOKENS=512
+CYBERNH_DEEPSEEK_TIMEOUT_SECONDS=120
+CYBERNH_DEEPSEEK_JSON_MODE=true
+CYBERNH_DEEPSEEK_THINKING=disabled
+```
+
+`config/deepseek.env` 已被 `.gitignore` 忽略，不会提交真实 API key。命令行中显式传入的环境变量仍然优先。
+
+也可以在前端 `照护策略 -> Agent 决策` 中切换到 `DeepSeek API 驱动`。该模式使用 DeepSeek 的 OpenAI-compatible `/chat/completions` 接口，并开启 JSON Output。
+
+### 4. 只启动本地 LLM
 
 ```bash
 ./S1_Start_llm.sh

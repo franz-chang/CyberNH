@@ -609,7 +609,7 @@ class CyberNHSimulation {
 
   async requiredLlmDecision(worker) {
     const observation = this.getWorkerObservation(worker.id);
-    const llmResult = await decideWorkerWithLlm(observation);
+    const llmResult = await decideWorkerWithLlm(observation, { decisionMode: this.config.agentDecisionMode });
     const eventPayload = {
       agent_id: worker.id,
       mode: this.config.agentDecisionMode,
@@ -1380,7 +1380,9 @@ function normalizeConfig(input) {
   config.assistantAgentEnabled = Boolean(config.assistantAgentEnabled);
   config.seniorAgentLlmEnabled = Boolean(config.seniorAgentLlmEnabled);
   config.workerAgentLlmEnabled = Boolean(config.workerAgentLlmEnabled);
-  config.agentDecisionMode = config.agentDecisionMode === "rule_only" ? "rule_only" : "llm_required";
+  config.agentDecisionMode = ["rule_only", "llm_required", "deepseek_api"].includes(config.agentDecisionMode)
+    ? config.agentDecisionMode
+    : "llm_required";
   return config;
 }
 
