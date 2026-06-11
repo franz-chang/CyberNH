@@ -11,7 +11,11 @@ MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-VL-2B-Instruct}"
 OUTPUT_DIR="${CYBERNH_RULES_ADAPTER_DIR:-$LLM_DIR/adapters/rules-lora}"
 TRAIN_FILE="$RULES_FT_DIR/data/train_rules_augmented.jsonl"
 EVAL_FILE="$RULES_FT_DIR/data/eval_rules.jsonl"
-REPEAT="${CYBERNH_RULES_FINETUNE_REPEAT:-2}"
+CASE_REPEAT="${CYBERNH_RULES_FINETUNE_CASE_REPEAT:-24}"
+SEED_REPEAT="${CYBERNH_RULES_FINETUNE_SEED_REPEAT:-4}"
+GUIDANCE_REPEAT="${CYBERNH_RULES_FINETUNE_GUIDANCE_REPEAT:-2}"
+ANCHOR_REPEAT="${CYBERNH_RULES_FINETUNE_ANCHOR_REPEAT:-1}"
+MAX_STEPS="${CYBERNH_RULES_FINETUNE_MAX_STEPS:-640}"
 INSTALL_DEPS="${CYBERNH_FINETUNE_INSTALL_DEPS:-1}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
@@ -29,7 +33,10 @@ fi
 "$PYTHON_BIN" "$RULES_FT_DIR/build_rules_dataset.py" \
   --train-output "$TRAIN_FILE" \
   --eval-output "$EVAL_FILE" \
-  --repeat "$REPEAT" \
+  --case-repeat "$CASE_REPEAT" \
+  --seed-repeat "$SEED_REPEAT" \
+  --guidance-repeat "$GUIDANCE_REPEAT" \
+  --anchor-repeat "$ANCHOR_REPEAT" \
   --include-system-anchors
 
 if [[ "$INSTALL_DEPS" == "1" || "$INSTALL_DEPS" == "true" ]]; then
@@ -43,7 +50,7 @@ exec "$PYTHON_BIN" "$SCENARIO_DIR/train_lora.py" \
   --train-file "$TRAIN_FILE" \
   --eval-file "$EVAL_FILE" \
   --output-dir "$OUTPUT_DIR" \
-  --max-steps 160 \
+  --max-steps "$MAX_STEPS" \
   --epochs 40 \
   --batch-size 1 \
   --grad-accum 1 \
@@ -53,5 +60,5 @@ exec "$PYTHON_BIN" "$SCENARIO_DIR/train_lora.py" \
   --lora-dropout 0 \
   --manifest-task "CyberNH rules and resident-priority reasoning" \
   --manifest-file "cybernh_rules_manifest.json" \
-  --manifest-extra-json '{"rule_sources":["rules/datasets/train_seed.jsonl","rules/datasets/eval_cases.jsonl","rules/structured/rules.jsonl","rules/structured/metrics.jsonl"],"includes_system_scenario_anchors":true}' \
+  --manifest-extra-json '{"rule_sources":["rules/datasets/train_seed.jsonl","rules/datasets/eval_cases.jsonl","rules/structured/rules.jsonl","rules/structured/metrics.jsonl"],"includes_system_scenario_anchors":true,"method":"strict_schema_high_weight_cases","case_shapes":["trained_format_with_rule_summaries","sparse_probe_without_rule_text","exact_schema_prompt"],"default_max_steps":640}' \
   "$@"
