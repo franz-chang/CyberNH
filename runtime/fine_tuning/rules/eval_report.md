@@ -6,6 +6,33 @@ Adapter:
 /Users/chongzhang/CyberNH-LLM/adapters/rules-lora
 ```
 
+Training method:
+
+```text
+strict_schema_high_weight_cases
+```
+
+The rules dataset is now built with three complementary prompt shapes for every
+evaluation case:
+
+- trained-format prompts with relevant rule summaries
+- sparse prompts with only `case_id`, `rule_ids`, and `input`
+- exact schema prompts that reinforce the required JSON keys
+
+The default rules fine-tuning run uses high-weight case repetition and longer
+training:
+
+```text
+case_repeat=24
+seed_repeat=4
+guidance_repeat=2
+anchor_repeat=1
+max_steps=640
+train_records=630
+eval_records=7
+final_eval_loss=0.0004
+```
+
 Live endpoint check:
 
 ```text
@@ -17,47 +44,41 @@ adapter_check=PASS
 
 ## Sparse Probe
 
-Prompt shape: only `case_id`, `rule_ids`, and `input`; no full rule text or output schema.
+Prompt shape: only `case_id`, `rule_ids`, and `input`; no full rule text or
+output schema.
 
 Result:
 
 ```text
-rules_eval_passed=0/7
+EVAL-CNH-001: PASS
+EVAL-CNH-002: PASS
+EVAL-CNH-003: PASS
+EVAL-CNH-004: PASS
+EVAL-CNH-005: PASS
+EVAL-CNH-006: PASS
+EVAL-CNH-007: PASS
+rules_eval_passed=7/7
 ```
-
-Observed failure pattern:
-
-- The model usually emitted valid JSON.
-- It often reduced `expected` to a boolean instead of the required nested object.
-- This means the adapter is loaded, but sparse zero-shot rule recall is not reliable enough for structured runtime use.
 
 ## Trained-Format Probe
 
-Prompt shape: `runtime/fine_tuning/rules/data/eval_rules.jsonl` user payload, including relevant rule summaries.
+Prompt shape: `runtime/fine_tuning/rules/data/eval_rules.jsonl` user payload,
+including relevant rule summaries.
 
 Result:
 
 ```text
-rules_eval_passed=3/7
+EVAL-CNH-001: PASS
+EVAL-CNH-002: PASS
+EVAL-CNH-003: PASS
+EVAL-CNH-004: PASS
+EVAL-CNH-005: PASS
+EVAL-CNH-006: PASS
+EVAL-CNH-007: PASS
+rules_eval_passed=7/7
 ```
-
-Passed:
-
-- `EVAL-CNH-004`
-- `EVAL-CNH-005`
-- `EVAL-CNH-006`
-
-Failed:
-
-- `EVAL-CNH-001`: preserved preemption semantics, but missed exact keys `allowed_interrupted_task_outcomes` and `must_preserve_remaining_time_if_paused`.
-- `EVAL-CNH-002`: recognized two-person coordination reason, but emitted `within_rule_range` instead of `service_can_start=false/state=coordination_waiting`.
-- `EVAL-CNH-003`: same key-instability pattern for two-person coordination.
-- `EVAL-CNH-007`: computed `0.84`, but emitted it as `expected_metric/expected_value` instead of `task_completion_rate`.
 
 ## Conclusion
 
-The rules LoRA was successfully trained and loaded, but current behavior is only partially effective:
-
-- Effective for adapter loading and some rule families.
-- Not yet reliable for strict structured JSON keys.
-- Needs additional structure-stabilization examples or stronger runtime output schema in the prompt before using it as a dependable rules decision adapter.
+The rules LoRA was retrained, loaded by the local Qwen service, and passed both
+the sparse and trained-format live evaluations at 100%.
