@@ -19,6 +19,9 @@ load_env_defaults() {
     value="${line#*=}"
     [[ "$key" == "$line" ]] && continue
     [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    if [[ ( "$value" == \"*\" && "$value" == *\" ) || ( "$value" == \'*\' && "$value" == *\' ) ]]; then
+      value="${value:1:${#value}-2}"
+    fi
     if [[ -z "${!key+x}" ]]; then
       export "$key=$value"
     fi

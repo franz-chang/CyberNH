@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 import os
 
+DEEPSEEK_DECISION_MODE = "deepseek_api"
+
 
 @dataclass(frozen=True)
 class LLMConfig:
@@ -23,8 +25,20 @@ def _env_bool(name: str, fallback: bool) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
-def load_llm_config() -> LLMConfig:
-    if os.getenv("CYBERNH_DEFAULT_AGENT_DECISION_MODE") == "deepseek_api" or os.getenv("CYBERNH_LLM_PROVIDER") == "deepseek":
+def _uses_deepseek(decision_mode: str | None = None, provider: str | None = None) -> bool:
+    if decision_mode:
+        return decision_mode == DEEPSEEK_DECISION_MODE
+    if provider:
+        return provider.lower() == "deepseek"
+
+    default_decision_mode = os.getenv("CYBERNH_DEFAULT_AGENT_DECISION_MODE")
+    if default_decision_mode:
+        return default_decision_mode == DEEPSEEK_DECISION_MODE
+    return os.getenv("CYBERNH_LLM_PROVIDER", "").lower() == "deepseek"
+
+
+def load_llm_config(decision_mode: str | None = None, provider: str | None = None) -> LLMConfig:
+    if _uses_deepseek(decision_mode, provider):
         return LLMConfig(
             provider="deepseek",
             model=os.getenv("CYBERNH_DEEPSEEK_MODEL", "deepseek-v4-flash"),

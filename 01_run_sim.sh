@@ -28,6 +28,9 @@ load_env_defaults() {
     value="${line#*=}"
     [[ "$key" == "$line" ]] && continue
     [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    if [[ ( "$value" == \"*\" && "$value" == *\" ) || ( "$value" == \'*\' && "$value" == *\' ) ]]; then
+      value="${value:1:${#value}-2}"
+    fi
     if [[ -z "${!key+x}" ]]; then
       export "$key=$value"
     fi
@@ -239,12 +242,8 @@ wait_for_llm_endpoint() {
 }
 
 start_llm_if_needed() {
-  if uses_deepseek_api; then
-    echo "DeepSeek API decision mode enabled; skipping local LLM startup."
-    if [[ -z "${CYBERNH_DEEPSEEK_API_KEY:-}" ]]; then
-      echo "Warning: CYBERNH_DEEPSEEK_API_KEY is not set. DeepSeek requests will fail until it is configured."
-    fi
-    return
+  if uses_deepseek_api && [[ -z "${CYBERNH_DEEPSEEK_API_KEY:-}" ]]; then
+    echo "Warning: CYBERNH_DEEPSEEK_API_KEY is not set. DeepSeek requests will fail until it is configured."
   fi
 
   if llm_endpoint_ready; then
@@ -318,9 +317,11 @@ export PORT
 echo "Starting Cyber-NH from: $ROOT_DIR"
 echo "Dashboard URL: http://localhost:$PORT"
 if uses_deepseek_api; then
-  echo "LLM provider: DeepSeek API"
-  echo "LLM endpoint: ${CYBERNH_DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
-  echo "LLM model: ${CYBERNH_DEEPSEEK_MODEL:-deepseek-v4-flash}"
+  echo "Default LLM provider: DeepSeek API"
+  echo "DeepSeek endpoint: ${CYBERNH_DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
+  echo "DeepSeek model: ${CYBERNH_DEEPSEEK_MODEL:-deepseek-v4-flash}"
+  echo "Local Qwen endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
+  echo "Local Qwen model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
 else
   echo "LLM endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
   echo "LLM model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"

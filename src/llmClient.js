@@ -28,11 +28,12 @@ function envBoolean(name, fallback) {
 }
 
 function isDeepSeekMode(options = {}) {
-  return (
-    options.decisionMode === DEEPSEEK_DECISION_MODE ||
-    process.env.CYBERNH_DEFAULT_AGENT_DECISION_MODE === DEEPSEEK_DECISION_MODE ||
-    String(options.provider || process.env.CYBERNH_LLM_PROVIDER || "").toLowerCase() === "deepseek"
-  );
+  if (options.decisionMode) return options.decisionMode === DEEPSEEK_DECISION_MODE;
+  if (options.provider) return String(options.provider).toLowerCase() === "deepseek";
+  if (process.env.CYBERNH_DEFAULT_AGENT_DECISION_MODE) {
+    return process.env.CYBERNH_DEFAULT_AGENT_DECISION_MODE === DEEPSEEK_DECISION_MODE;
+  }
+  return String(process.env.CYBERNH_LLM_PROVIDER || "").toLowerCase() === "deepseek";
 }
 
 function loadLlmConfig(options = {}) {
@@ -142,7 +143,7 @@ async function completeOnce(cfg, requestPayload) {
       return {
         ok: false,
         rawReply: responseText,
-        error: `LLM endpoint returned ${response.status}`,
+        error: describeHttpError(cfg, response.status),
       };
     }
 
@@ -156,11 +157,33 @@ async function completeOnce(cfg, requestPayload) {
     return {
       ok: false,
       rawReply: null,
-      error: error.name === "AbortError" ? `LLM request timed out after ${cfg.timeoutSeconds}s` : error.message,
+      error: describeRequestError(cfg, error),
     };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function describeHttpError(cfg, status) {
+  if (cfg.provider === "deepseek" && status === 401) {
+    return "DeepSeek API returned 401 Unauthorized; check CYBERNH_DEEPSEEK_API_KEY";
+  }
+  if (cfg.provider !== "deepseek" && status === 401) {
+    return "Local Qwen endpoint returned 401; check CYBERNH_LLM_API_KEY matches the running LLM server";
+  }
+  return `LLM endpoint returned ${status}`;
+}
+
+function describeRequestError(cfg, error) {
+  if (error.name === "AbortError") return `LLM request timed out after ${cfg.timeoutSeconds}s`;
+  const code = error.cause?.code || error.code || "";
+  if (cfg.provider !== "deepseek" && (code === "ECONNREFUSED" || error.message === "fetch failed")) {
+    return `Local Qwen endpoint is not reachable at ${cfg.baseUrl}; start it with ./S1_Start_llm.sh or ./01_run_sim.sh`;
+  }
+  if (cfg.provider === "deepseek" && (code === "ECONNREFUSED" || error.message === "fetch failed")) {
+    return `DeepSeek API endpoint is not reachable at ${cfg.baseUrl}`;
+  }
+  return error.message;
 }
 
 function buildRequestPayload(cfg, observation) {

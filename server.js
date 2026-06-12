@@ -3,6 +3,10 @@ const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
 
+const DEFAULT_LLM_DIR = path.join(path.dirname(__dirname), `${path.basename(__dirname)}-LLM`);
+const LLM_DIR = process.env.CYBERNH_LLM_DIR || DEFAULT_LLM_DIR;
+
+loadEnvFile(path.join(LLM_DIR, ".env"));
 loadEnvFile(path.join(__dirname, "LLM", ".env"));
 loadEnvFile(path.join(__dirname, "config", "deepseek.env"));
 loadEnvFile(path.join(__dirname, ".env"));

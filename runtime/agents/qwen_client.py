@@ -34,10 +34,10 @@ ASSISTANT_PRIORITIES = ["null", "low", "medium", "high", "highest"]
 
 
 class QwenOpenAICompatibleClient:
-    def __init__(self):
+    def __init__(self, decision_mode: str | None = None, provider: str | None = None):
         from openai import OpenAI
 
-        cfg = load_llm_config()
+        cfg = load_llm_config(decision_mode=decision_mode, provider=provider)
         self.cfg = cfg
         self.client = OpenAI(
             base_url=cfg.base_url,

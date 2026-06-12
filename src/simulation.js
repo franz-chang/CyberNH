@@ -635,7 +635,7 @@ class CyberNHSimulation {
         reason: `LLM decision failed: ${llmResult.error}`,
         tick: this.state.tick,
       });
-      this.logEvent("agent.decision", "error", `${worker.id}: LLM decision failed`, eventPayload);
+      this.logEvent("agent.decision", "error", `${worker.id}: LLM decision failed: ${llmResult.error}`, eventPayload);
       throw new Error(`LLM decision failed for ${worker.id}: ${llmResult.error}`);
     }
 

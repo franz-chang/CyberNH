@@ -3,10 +3,10 @@ from .prompt_registry import PromptRegistry
 
 
 class CyberNHAgentFactory:
-    def __init__(self):
+    def __init__(self, decision_mode: str | None = None, provider: str | None = None):
         self.prompt_registry = PromptRegistry()
         self.prompt_registry.load_all()
-        self.llm_config = load_llm_config()
+        self.llm_config = load_llm_config(decision_mode=decision_mode, provider=provider)
         self._agents = {}
 
     def _create_chat_agent(self, system_message: str):
@@ -42,4 +42,3 @@ class CyberNHAgentFactory:
         if key not in self._agents:
             self._agents[key] = self._create_chat_agent(self.prompt_registry.get("Assistant-Agent"))
         return self._agents[key]
-
