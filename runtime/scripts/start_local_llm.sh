@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="${CYBERNH_ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 DEFAULT_LLM_DIR="$(cd "$ROOT_DIR/.." && pwd)/$(basename "$ROOT_DIR")-LLM"
 LLM_DIR="${CYBERNH_LLM_DIR:-$DEFAULT_LLM_DIR}"
 export CYBERNH_LLM_DIR="$LLM_DIR"
+
 LLM_LOG_DIR="$ROOT_DIR/runtime/logs"
 LLM_LOG_FILE="$LLM_LOG_DIR/llm-serve.log"
 LLM_PID_FILE="$ROOT_DIR/runtime/llm.pid"
@@ -41,6 +42,8 @@ API_KEY="${CYBERNH_LLM_API_KEY:-EMPTY}"
 BACKGROUND="${CYBERNH_LLM_BACKGROUND:-0}"
 CHAT="${CYBERNH_LLM_CHAT:-1}"
 KEEP_ALIVE="${CYBERNH_LLM_KEEP_ALIVE:-0}"
+export CYBERNH_LLM_CLI_SHOW_TIMING="${CYBERNH_LLM_CLI_SHOW_TIMING:-1}"
+
 LLM_PID=""
 STARTED_LLM=0
 
@@ -58,6 +61,50 @@ is_truthy() {
       return 1
       ;;
   esac
+}
+
+json_field() {
+  local field="$1"
+  python3 -c 'import json, sys; print(json.load(sys.stdin).get(sys.argv[1], ""))' "$field" 2>/dev/null || true
+}
+
+first_model_id() {
+  python3 -c 'import json, sys; data=json.load(sys.stdin).get("data", []); print(data[0].get("id", "") if data else "")' 2>/dev/null || true
+}
+
+endpoint_model() {
+  local model_from_health
+  local model_from_models
+
+  model_from_health="$(
+    curl -fsS --max-time 2 "$BASE_URL/health" 2>/dev/null | json_field model
+  )"
+  if [[ -n "$model_from_health" ]]; then
+    echo "$model_from_health"
+    return 0
+  fi
+
+  model_from_models="$(
+    curl -fsS --max-time 2 \
+      -H "Authorization: Bearer $API_KEY" \
+      "$BASE_URL/models" 2>/dev/null | first_model_id
+  )"
+  if [[ -n "$model_from_models" ]]; then
+    echo "$model_from_models"
+  fi
+}
+
+ensure_endpoint_model() {
+  local running_model
+  running_model="$(endpoint_model)"
+  if [[ -n "$running_model" && "$running_model" != "$MODEL_NAME" ]]; then
+    echo "Error: endpoint is already serving another model."
+    echo "Endpoint: $BASE_URL"
+    echo "Running model: $running_model"
+    echo "Expected model: $MODEL_NAME"
+    echo "Stop the existing LLM process first."
+    exit 1
+  fi
 }
 
 llm_endpoint_ready() {
@@ -127,6 +174,7 @@ stop_started_llm() {
 }
 
 start_llm_background() {
+  local listener_pid
   mkdir -p "$LLM_LOG_DIR" "$(dirname "$LLM_PID_FILE")"
   : > "$LLM_LOG_FILE"
   nohup "$LLM_DIR/serve_transformers.sh" >"$LLM_LOG_FILE" 2>&1 </dev/null &
@@ -143,6 +191,7 @@ start_llm_background() {
       LLM_PID="$listener_pid"
       echo "$LLM_PID" > "$LLM_PID_FILE"
     fi
+    ensure_endpoint_model
     echo "LLM endpoint is reachable: $BASE_URL"
     return 0
   fi
@@ -167,6 +216,7 @@ if llm_endpoint_ready; then
   if [[ -n "$listener_pid" ]]; then
     echo "$listener_pid" > "$LLM_PID_FILE"
   fi
+  ensure_endpoint_model
   echo "LLM endpoint is already reachable: $BASE_URL"
   if [[ -n "${listener_pid:-}" ]]; then
     echo "LLM pid: $listener_pid"
@@ -182,6 +232,7 @@ check_llm_assets
 echo "Starting Cyber-NH LLM only"
 echo "Endpoint: $BASE_URL"
 echo "Model: $MODEL_NAME"
+echo "Model path: $MODEL_DIR"
 
 if is_truthy "$CHAT"; then
   if ! start_llm_background; then

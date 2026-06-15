@@ -1,0 +1,2 @@
+model_label,model,sample_size,seed,total_seconds,avg_seconds,median_seconds,min_seconds,max_seconds,correct,accuracy
+4B,qwen3-vl-4b-instruct,10,3313576920,126.0326,12.6024,11.9877,6.89,28.7122,9,0.9
