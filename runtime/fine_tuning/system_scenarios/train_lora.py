@@ -21,6 +21,7 @@ from transformers import AutoProcessor
 @dataclass
 class TrainConfig:
     model_dir: str
+    base_adapter_dir: str | None
     train_file: str
     eval_file: str | None
     output_dir: str
@@ -91,6 +92,7 @@ def parse_args() -> argparse.Namespace:
     default_llm_dir = Path(os.getenv("CYBERNH_LLM_DIR", "/Users/chongzhang/CyberNH-LLM"))
     parser = argparse.ArgumentParser(description="LoRA fine-tune Qwen3-VL for CyberNH system scenario tags.")
     parser.add_argument("--model-dir", default=os.getenv("CYBERNH_LLM_LOCAL_DIR", str(default_llm_dir / "models" / "Qwen3-VL-2B-Instruct")))
+    parser.add_argument("--base-adapter-dir", default=None, help="Optional existing LoRA adapter to continue training.")
     parser.add_argument("--train-file", default=str(root / "data" / "train_augmented_runtime.jsonl"))
     parser.add_argument("--eval-file", default=str(root / "data" / "eval.jsonl"))
     parser.add_argument("--output-dir", default=str(default_llm_dir / "adapters" / "system-scenarios-lora"))
@@ -251,6 +253,7 @@ def main() -> int:
     args = parse_args()
     config = TrainConfig(
         model_dir=args.model_dir,
+        base_adapter_dir=args.base_adapter_dir,
         train_file=args.train_file,
         eval_file=args.eval_file,
         output_dir=args.output_dir,
@@ -289,7 +292,7 @@ def main() -> int:
         return 0
 
     try:
-        from peft import LoraConfig, get_peft_model
+        from peft import LoraConfig, PeftModel, get_peft_model
     except ImportError as exc:
         raise RuntimeError(
             "peft is required for LoRA fine-tuning. Install with: "
@@ -307,17 +310,23 @@ def main() -> int:
     if hasattr(model, "config"):
         model.config.use_cache = False
 
-    targets = infer_lora_targets(model)
-    print(f"lora_targets={','.join(targets)}")
-    lora_config = LoraConfig(
-        r=args.lora_rank,
-        lora_alpha=args.lora_alpha,
-        lora_dropout=args.lora_dropout,
-        bias="none",
-        task_type="CAUSAL_LM",
-        target_modules=targets,
-    )
-    model = get_peft_model(model, lora_config)
+    if args.base_adapter_dir:
+        print(f"continuing_adapter={args.base_adapter_dir}")
+        model = PeftModel.from_pretrained(model, args.base_adapter_dir, is_trainable=True)
+        if hasattr(model, "enable_adapter_layers"):
+            model.enable_adapter_layers()
+    else:
+        targets = infer_lora_targets(model)
+        print(f"lora_targets={','.join(targets)}")
+        lora_config = LoraConfig(
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=targets,
+        )
+        model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
     model.to(device)
     model.train()

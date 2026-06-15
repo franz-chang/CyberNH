@@ -13,6 +13,12 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
+ROOT_DIR = Path(__file__).resolve().parents[3]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from runtime.agents.compact_payload import compact_worker_payload
+
 WORKER_ACTIONS = [
     "accept_task",
     "join_two_person_task",
@@ -202,12 +208,7 @@ def user_payload(record: dict[str, Any]) -> dict[str, Any]:
     observation = original.get("observation", {})
     agent_type = record["agent_type"]
     if agent_type == "Worker-Agent":
-        schema = worker_schema(observation)
-        important = [
-            "Use exactly these keys: agent_id, action, target_demand_id, reason, confidence, memory_update.",
-            "Only observation.candidateDemands is assignable. Ignore any demand IDs not listed there.",
-            "If no candidate demand is suitable, use action=reject_all and target_demand_id=null.",
-        ]
+        return compact_worker_payload(observation)
     elif agent_type == "Senior-Agent":
         schema = senior_schema(observation)
         important = [
@@ -275,7 +276,7 @@ def completion(base_url: str, api_key: str, model: str, record: dict[str, Any], 
         "model": model,
         "messages": [
             {"role": "system", "content": record["scenario"]},
-            {"role": "user", "content": json.dumps(user_payload(record), ensure_ascii=False)},
+            {"role": "user", "content": json.dumps(user_payload(record), ensure_ascii=False, separators=(",", ":"))},
         ],
         "temperature": 0,
         "max_tokens": max_tokens,

@@ -5,6 +5,28 @@ const PROMPT_MODE_ENV = "CYBERNH_SYSTEM_PROMPT_MODE";
 const ALIAS_PROMPT_MODES = new Set(["alias", "aliases", "scenario", "scenario_alias", "short"]);
 const FULL_PROMPT_MODES = new Set(["full", "legacy", "long"]);
 const DEEPSEEK_DECISION_MODE = "deepseek_api";
+const LLM_INPUT_FORMAT_ENV = "CYBERNH_LLM_INPUT_FORMAT";
+const LLM_INPUT_FORMATS = new Set(["compact", "compact_v2", "compact_v1", "legacy"]);
+const WORKER_DECISION_SCHEMA = "WorkerDecisionV1";
+const WORKER_DEMAND_FIELDS = [
+  "id",
+  "room",
+  "task",
+  "cls",
+  "st",
+  "care",
+  "pl",
+  "score",
+  "wait",
+  "need",
+  "assigned",
+  "arrived",
+  "eq",
+  "eq_ok",
+  "dist",
+  "eta",
+  "rel",
+];
 
 const ACTIONS = new Set([
   "accept_task",
@@ -25,6 +47,12 @@ function envBoolean(name, fallback) {
   const value = process.env[name];
   if (value === undefined) return fallback;
   return /^(1|true|yes|on)$/i.test(value);
+}
+
+function llmInputFormat() {
+  const value = String(process.env[LLM_INPUT_FORMAT_ENV] || "compact").trim().toLowerCase();
+  if (!LLM_INPUT_FORMATS.has(value)) return "compact_v2";
+  return value === "compact" ? "compact_v2" : value;
 }
 
 function isDeepSeekMode(options = {}) {
@@ -49,6 +77,7 @@ function loadLlmConfig(options = {}) {
       jsonMode: envBoolean("CYBERNH_DEEPSEEK_JSON_MODE", true),
       thinking: process.env.CYBERNH_DEEPSEEK_THINKING || "disabled",
       forceFullSystemPrompt: true,
+      inputFormat: llmInputFormat(),
     };
   }
 
@@ -58,10 +87,11 @@ function loadLlmConfig(options = {}) {
     baseUrl: process.env.CYBERNH_LLM_BASE_URL || "http://localhost:8000/v1",
     apiKey: process.env.CYBERNH_LLM_API_KEY || "EMPTY",
     temperature: envNumber("CYBERNH_LLM_TEMPERATURE", 0),
-    maxTokens: envNumber("CYBERNH_LLM_MAX_TOKENS", 512),
+    maxTokens: envNumber("CYBERNH_LLM_MAX_TOKENS", 5096),
     timeoutSeconds: envNumber("CYBERNH_LLM_TIMEOUT_SECONDS", 120),
     jsonMode: envBoolean("CYBERNH_LLM_JSON_MODE", true),
     forceFullSystemPrompt: false,
+    inputFormat: llmInputFormat(),
   };
 }
 
@@ -187,7 +217,7 @@ function describeRequestError(cfg, error) {
 }
 
 function buildRequestPayload(cfg, observation) {
-  const llmObservation = prepareWorkerObservationForLlm(observation);
+  const userPayload = workerUserPayload(cfg, observation);
   const messages = [
     {
       role: "system",
@@ -195,28 +225,7 @@ function buildRequestPayload(cfg, observation) {
     },
     {
       role: "user",
-      content: JSON.stringify(
-        {
-          instruction: "Return one valid JSON object only. No markdown. No chain-of-thought.",
-          output_schema: workerDecisionSchema(observation),
-          important: [
-            "Use exactly these keys: agent_id, action, target_demand_id, reason, confidence, memory_update.",
-            "The action key is required. Do not use decision, task, command, or status instead of action.",
-            "agent_id must equal the observation.agentId.",
-            "Only observation.candidateDemands is assignable. Ignore any demand IDs not listed there.",
-            "If action is accept_task or join_two_person_task, target_demand_id must be one of observation.candidateDemands[].demandId.",
-            "If no candidate demand is suitable, use action=reject_all and target_demand_id=null.",
-          ],
-          allowed_target_demand_ids: (llmObservation.candidateDemands || []).map((demand) => demand.demandId),
-          metadata: {
-            provider: cfg.provider,
-            prompt_mode: cfg.forceFullSystemPrompt ? "full_system_prompt" : "configured",
-          },
-          observation: llmObservation,
-        },
-        null,
-        2
-      ),
+      content: stringifyUserContent(userPayload, cfg),
     },
   ];
   const payload = {
@@ -234,6 +243,22 @@ function buildRequestPayload(cfg, observation) {
 
 function buildRepairRequestPayload(cfg, observation, originalPayload, invalidContent, validationError) {
   const allowedTargetIds = (observation.candidateDemands || []).map((demand) => demand.demandId);
+  const compactInput = cfg.inputFormat !== "legacy";
+  const compactV2 = cfg.inputFormat === "compact_v2";
+  const repairPayload = {
+    instruction: compactV2 ? undefined : "Previous JSON was invalid. Return one corrected WorkerDecision JSON object only.",
+    schema: compactV2 ? WORKER_DECISION_SCHEMA : undefined,
+    repair: compactV2 ? "invalid_json" : undefined,
+    aid: compactV2 ? observation.agentId : undefined,
+    validation_error: validationError,
+    output_schema: compactV2 ? undefined : compactInput ? compactWorkerDecisionSchema(observation) : workerDecisionSchema(observation),
+  };
+  if (allowedTargetIds.length === 0) {
+    repairPayload.required_when_no_allowed_targets = { action: "reject_all", target_demand_id: null };
+  }
+  repairPayload[compactV2 ? "allowed_targets" : "allowed_target_demand_ids"] = compactV2
+    ? [...allowedTargetIds, null]
+    : allowedTargetIds;
   return {
     ...originalPayload,
     messages: [
@@ -241,35 +266,197 @@ function buildRepairRequestPayload(cfg, observation, originalPayload, invalidCon
       { role: "assistant", content: invalidContent || "{}" },
       {
         role: "user",
-        content: JSON.stringify(
-          {
-            instruction: "Your previous JSON was invalid for Cyber-NH. Return one corrected WorkerDecision JSON object only.",
-            validation_error: validationError,
-            allowed_target_demand_ids: allowedTargetIds,
-            required_when_no_allowed_targets: allowedTargetIds.length === 0
-              ? { action: "reject_all", target_demand_id: null }
-              : undefined,
-            output_schema: workerDecisionSchema(observation),
-          },
-          null,
-          2
-        ),
+        content: stringifyUserContent(repairPayload, cfg),
       },
     ],
   };
 }
 
-function prepareWorkerObservationForLlm(observation) {
+function workerUserPayload(cfg, observation) {
+  if (cfg.inputFormat === "legacy") {
+    const llmObservation = prepareWorkerObservationForLlm(observation, { compact: false });
+    return legacyWorkerUserPayload(cfg, observation, llmObservation);
+  }
+  if (cfg.inputFormat === "compact_v1") {
+    const llmObservation = prepareWorkerObservationForLlm(observation, { compact: true });
+    return compactWorkerUserPayloadV1(observation, llmObservation);
+  }
+  return compactWorkerUserPayloadV2(observation);
+}
+
+function legacyWorkerUserPayload(cfg, observation, llmObservation) {
+  return {
+    instruction: "Return one valid JSON object only. No markdown. No chain-of-thought.",
+    output_schema: workerDecisionSchema(observation),
+    important: workerInputRules(),
+    allowed_target_demand_ids: (llmObservation.candidateDemands || []).map((demand) => demand.demandId),
+    metadata: {
+      provider: cfg.provider,
+      prompt_mode: cfg.forceFullSystemPrompt ? "full_system_prompt" : "configured",
+    },
+    observation: llmObservation,
+  };
+}
+
+function compactWorkerUserPayloadV1(observation, llmObservation) {
+  return {
+    instruction: "Return one valid JSON object only. No markdown. No chain-of-thought.",
+    output_schema: compactWorkerDecisionSchema(observation),
+    important: workerInputRules({ compact: true }),
+    observation: llmObservation,
+  };
+}
+
+function compactWorkerUserPayloadV2(observation) {
+  const memory = observation.workerMemory || {};
+  const publicMemory = memory.publicMemory || {};
+  const queue = memory.taskQueue || {};
+  const env = memory.envMemory || {};
+  const exp = memory.expMemory || {};
+  const panel = observation.panelState || {};
+  const currentTask = observation.currentTask || {};
+  const status = publicMemory.status ?? observation.status;
+  const fatigue = publicMemory.fatigue ?? observation.fatigue;
+  const state = compactObject({
+    wing: publicMemory.wing,
+    tile: compactTile(publicMemory.currentTile),
+    status,
+    fatigue,
+    speed: publicMemory.effectiveSpeedMPerMin,
+    current: publicMemory.currentTaskId ?? currentTask.demandId,
+    current_cls: currentTask.taskClass,
+    current_remaining: currentTask.remainingServiceTicks,
+    done_count: publicMemory.completedTaskCount ?? countItems(queue.done),
+    walk_m: publicMemory.totalWalkingDistanceM,
+    service_ticks: publicMemory.totalServiceTicks,
+    queue: compactObject({
+      todo: queue.todo,
+      doing: queue.doing,
+      done_count: countItems(queue.done),
+      paused_count: countItems(queue.paused),
+      abandoned_count: countItems(queue.abandoned),
+    }),
+  });
+
+  return compactObject({
+    schema: WORKER_DECISION_SCHEMA,
+    aid: observation.agentId,
+    tick: observation.tick,
+    time: observation.currentTime,
+    mode: observation.careMode,
+    sim: compactObject({
+      duration: panel.durationTicks,
+      days: panel.simulationDays,
+      total: panel.totalDurationTicks,
+    }),
+    state,
+    constraints: compactConstraints(observation.constraints || {}, status),
+    eq: env.knownEquipment,
+    congestion: env.congestedAreas,
+    nearby: env.nearbyPendingDemands,
+    stable_seniors: exp.stableSeniorIds,
+    prefs: exp.learnedPreferenceTags,
+    recent_reasons: exp.recentDecisionReasons,
+    demand_fields: WORKER_DEMAND_FIELDS,
+    demands: (observation.candidateDemands || []).map(compactDemandRow),
+    allowed_targets: allowedTargetIds(observation),
+  });
+}
+
+function compactConstraints(constraints, status) {
+  const unavailable = constraints.unavailable ?? (status === undefined ? undefined : status === "unavailable");
+  const accept = constraints.canAcceptNewTask ?? (status === undefined ? undefined : status === "idle" && !unavailable);
+  return compactObject({
+    accept,
+    preempt: constraints.canPreemptCurrentTask,
+    fatigue_warn: constraints.fatigueWarning,
+    unavailable,
+  });
+}
+
+function compactDemandRow(demand) {
+  return [
+    demand.demandId ?? null,
+    demand.room ?? null,
+    demand.taskLabelZh ?? null,
+    demand.taskClass ?? null,
+    demand.status ?? null,
+    demand.seniorCareLevel ?? null,
+    demand.priorityLevel ?? null,
+    demand.priorityScore ?? null,
+    demand.waitingTicks ?? null,
+    demand.requiredWorkers ?? null,
+    demand.assignedWorkerIds || [],
+    demand.arrivedWorkerIds || [],
+    demand.requiredEquipment || [],
+    demand.equipmentAvailable ?? null,
+    demand.routeDistanceM ?? demand.distanceM ?? null,
+    demand.estimatedArrivalTicks ?? null,
+    demand.stableRelation ?? null,
+  ];
+}
+
+function allowedTargetIds(observation) {
+  return [...(observation.candidateDemands || []).map((demand) => demand.demandId).filter(Boolean), null];
+}
+
+function compactTile(tile) {
+  if (tile && typeof tile === "object" && "x" in tile && "y" in tile) return [tile.x, tile.y];
+  return tile;
+}
+
+function countItems(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function compactObject(payload) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => {
+      if (value === undefined || value === null) return false;
+      if (Array.isArray(value) && value.length === 0) return false;
+      if (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) return false;
+      return true;
+    })
+  );
+}
+
+function workerInputRules({ compact = false } = {}) {
+  if (compact) {
+    return [
+      "Use exactly output_schema.required; action key is required; do not use decision/task/command/status.",
+      "agent_id must equal observation.agentId.",
+      "Only observation.candidateDemands[].demandId is assignable; broadcastBoard, workerMemory, done/waiting IDs are context only.",
+      "For accept_task/join_two_person_task, target_demand_id must be in output_schema.fields.target_demand_id.",
+      "If no suitable candidate, use action=reject_all and target_demand_id=null.",
+    ];
+  }
+  return [
+    "Use exactly these keys: agent_id, action, target_demand_id, reason, confidence, memory_update.",
+    "The action key is required. Do not use decision, task, command, or status instead of action.",
+    "agent_id must equal the observation.agentId.",
+    "Only observation.candidateDemands is assignable. Ignore any demand IDs not listed there.",
+    "If action is accept_task or join_two_person_task, target_demand_id must be one of observation.candidateDemands[].demandId.",
+    "If no candidate demand is suitable, use action=reject_all and target_demand_id=null.",
+  ];
+}
+
+function stringifyUserContent(payload, cfg = {}) {
+  return cfg.inputFormat === "legacy" ? JSON.stringify(payload, null, 2) : JSON.stringify(payload);
+}
+
+function prepareWorkerObservationForLlm(observation, options = {}) {
   const llmObservation = JSON.parse(JSON.stringify(observation));
   const candidateIds = (llmObservation.candidateDemands || []).map((demand) => demand.demandId);
-  llmObservation.legalCandidateDemandIds = candidateIds;
+  if (!options.compact) llmObservation.legalCandidateDemandIds = candidateIds;
   llmObservation.decisionProtocol = {
-    assignableDemandSource: "candidateDemands only",
+    assignableDemandSource: options.compact ? "candidateDemands" : "candidateDemands only",
     forbiddenTargetSources: ["broadcastBoard", "workerMemory", "completedDemandIds", "waitingDemandIds"],
     noCandidateAction: "reject_all",
   };
   llmObservation.broadcastBoard = {
-    note: "Informational only. Demand IDs from the broadcast board are not legal targets unless they also appear in candidateDemands.",
+    note: options.compact
+      ? "context_only_not_legal_targets"
+      : "Informational only. Demand IDs from the broadcast board are not legal targets unless they also appear in candidateDemands.",
   };
   return llmObservation;
 }
@@ -365,6 +552,23 @@ function workerDecisionSchema(observation) {
   };
 }
 
+function compactWorkerDecisionSchema(observation) {
+  const agentId = observation.agentId;
+  const targetIds = (observation.candidateDemands || []).map((demand) => demand.demandId);
+  return {
+    required: ["agent_id", "action", "target_demand_id", "reason", "confidence", "memory_update"],
+    no_extra_keys: true,
+    fields: {
+      agent_id: { const: agentId },
+      action: [...ACTIONS],
+      target_demand_id: [...targetIds, null],
+      reason: "string",
+      confidence: "number[0,1]",
+      memory_update: "object",
+    },
+  };
+}
+
 function coerceDecisionShape(decision, observation) {
   if (!decision || typeof decision !== "object" || Array.isArray(decision)) return decision;
 
@@ -454,6 +658,7 @@ function publicConfig(cfg) {
     jsonMode: cfg.jsonMode,
     thinking: cfg.thinking,
     promptMode: cfg.forceFullSystemPrompt ? "full_system_prompt" : "configured",
+    inputFormat: cfg.inputFormat,
   };
 }
 

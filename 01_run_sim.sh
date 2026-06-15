@@ -12,7 +12,6 @@ DEFAULT_LLM_MODEL="qwen3-vl-2b-instruct"
 DEFAULT_LLM_MODEL_ID="Qwen/Qwen3-VL-2B-Instruct"
 DEFAULT_LLM_MODEL_DIR="$LLM_DIR/models/Qwen3-VL-2B-Instruct"
 DEFAULT_RULES_ADAPTER_DIR="$LLM_DIR/adapters/rules-lora"
-DEFAULT_SCENARIO_ADAPTER_DIR="$LLM_DIR/adapters/system-scenarios-lora"
 LLM_LOG_DIR="$ROOT_DIR/runtime/logs"
 LLM_LOG_FILE="$LLM_LOG_DIR/llm-serve.log"
 LLM_START_MODE="${CYBERNH_START_LLM:-auto}"
@@ -60,11 +59,7 @@ set_local_2b_defaults() {
   set_env_if_unset CYBERNH_DEFAULT_AGENT_DECISION_MODE "llm_required"
 
   if [[ -z "${CYBERNH_LLM_ADAPTER_DIR+x}" ]]; then
-    if [[ -d "$DEFAULT_RULES_ADAPTER_DIR" ]]; then
-      export CYBERNH_LLM_ADAPTER_DIR="$DEFAULT_RULES_ADAPTER_DIR"
-    elif [[ -d "$DEFAULT_SCENARIO_ADAPTER_DIR" ]]; then
-      export CYBERNH_LLM_ADAPTER_DIR="$DEFAULT_SCENARIO_ADAPTER_DIR"
-    fi
+    export CYBERNH_LLM_ADAPTER_DIR="$DEFAULT_RULES_ADAPTER_DIR"
   fi
 }
 
@@ -314,6 +309,7 @@ should_attempt_llm_start() {
 
 check_llm_assets() {
   local model_dir="${CYBERNH_LLM_LOCAL_DIR:-$DEFAULT_LLM_MODEL_DIR}"
+  local adapter_dir="${CYBERNH_LLM_ADAPTER_DIR:-}"
   if [[ ! -x "$LLM_DIR/.venv/bin/python" ]]; then
     echo "LLM virtualenv is missing: $LLM_DIR/.venv"
     echo "Run: $LLM_DIR/setup_modelscope.sh"
@@ -323,6 +319,14 @@ check_llm_assets() {
     echo "LLM model files are missing: $model_dir"
     echo "Run: $LLM_DIR/download_model.sh"
     return 1
+  fi
+  if should_require_scenario_adapter; then
+    if [[ -z "$adapter_dir" || ! -d "$adapter_dir" ]]; then
+      echo "LLM adapter directory is missing for short scenario-tag mode: ${adapter_dir:-<unset>}"
+      echo "Expected adapter: $DEFAULT_RULES_ADAPTER_DIR"
+      echo "Either restore the adapter or run with: CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh"
+      return 1
+    fi
   fi
   return 0
 }
@@ -344,6 +348,23 @@ wait_for_llm_endpoint() {
 start_llm_if_needed() {
   if uses_deepseek_api && [[ -z "${CYBERNH_DEEPSEEK_API_KEY:-}" ]]; then
     echo "Warning: CYBERNH_DEEPSEEK_API_KEY is not set. DeepSeek requests will fail until it is configured."
+  fi
+
+  if uses_deepseek_api && [[ "$LLM_START_MODE" == "auto" ]]; then
+    if llm_endpoint_ready; then
+      local running_model expected_model
+      expected_model="${CYBERNH_LLM_MODEL:-$DEFAULT_LLM_MODEL}"
+      running_model="$(llm_endpoint_model || true)"
+      if [[ -n "$running_model" && "$running_model" != "$expected_model" ]]; then
+        echo "Optional local Qwen endpoint is reachable, but serving a different model."
+        echo "Expected local model: $expected_model"
+        echo "Running local model:  $running_model"
+      fi
+      echo "Optional local Qwen endpoint is already reachable: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
+    else
+      echo "DeepSeek API mode detected; skipping local Qwen auto-start."
+    fi
+    return 0
   fi
 
   if llm_endpoint_ready; then
@@ -436,8 +457,12 @@ if uses_deepseek_api; then
   echo "Default LLM provider: DeepSeek API"
   echo "DeepSeek endpoint: ${CYBERNH_DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
   echo "DeepSeek model: ${CYBERNH_DEEPSEEK_MODEL:-deepseek-v4-flash}"
-  echo "Local Qwen endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
-  echo "Local Qwen model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
+  if llm_endpoint_ready; then
+    echo "Optional local Qwen endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
+    echo "Optional local Qwen model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
+  else
+    echo "Optional local Qwen endpoint: not started"
+  fi
 else
   echo "LLM endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
   echo "LLM model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"

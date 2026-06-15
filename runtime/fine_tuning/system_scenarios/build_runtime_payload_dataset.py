@@ -176,7 +176,7 @@ def to_runtime_record(record: dict) -> dict:
         record["messages"][0],
         {
             "role": "user",
-            "content": json.dumps(user_payload(record), ensure_ascii=False),
+            "content": json.dumps(user_payload(record), ensure_ascii=False, separators=(",", ":")),
         },
         record["messages"][2],
     ]

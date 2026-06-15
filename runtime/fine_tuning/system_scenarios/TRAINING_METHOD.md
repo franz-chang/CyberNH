@@ -148,13 +148,13 @@ summary: passed=6 failed=0 total=6
 - `runtime/agents/prompt_registry.py` 默认使用短标记。
 - `src/llmClient.js` 的 Worker-Agent 请求默认发送 `[System Scenario 1]`。
 - `runtime/agents/qwen_client.py` 的 Worker/Senior/Assistant 请求都使用训练时同款 runtime payload。
-- `01_run_sim.sh` 在短标记模式下会检查本地 LLM 是否加载了 scenario adapter。
+- `01_run_sim.sh` 在短标记模式下会检查本地 LLM 是否加载了能承载 scenario-tag 行为的 adapter；当前默认是 `rules-lora`，也可以单独加载 `system-scenarios-lora` 做对照实验。
 
 关键环境变量：
 
 ```bash
 CYBERNH_SYSTEM_PROMPT_MODE=scenario_alias
-CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
+CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/rules-lora
 CYBERNH_REQUIRE_SCENARIO_ADAPTER=auto
 ```
 

@@ -58,7 +58,7 @@ def load_llm_config(decision_mode: str | None = None, provider: str | None = Non
         base_url=os.getenv("CYBERNH_LLM_BASE_URL", "http://localhost:8000/v1"),
         api_key=os.getenv("CYBERNH_LLM_API_KEY", "EMPTY"),
         temperature=float(os.getenv("CYBERNH_LLM_TEMPERATURE", "0")),
-        max_tokens=int(os.getenv("CYBERNH_LLM_MAX_TOKENS", "512")),
+        max_tokens=int(os.getenv("CYBERNH_LLM_MAX_TOKENS", "5096")),
         timeout_seconds=int(os.getenv("CYBERNH_LLM_TIMEOUT_SECONDS", "120")),
         json_mode=_env_bool("CYBERNH_LLM_JSON_MODE", True),
         thinking=None,

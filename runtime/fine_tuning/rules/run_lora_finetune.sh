@@ -60,5 +60,5 @@ exec "$PYTHON_BIN" "$SCENARIO_DIR/train_lora.py" \
   --lora-dropout 0 \
   --manifest-task "CyberNH rules and resident-priority reasoning" \
   --manifest-file "cybernh_rules_manifest.json" \
-  --manifest-extra-json '{"rule_sources":["rules/datasets/train_seed.jsonl","rules/datasets/eval_cases.jsonl","rules/structured/rules.jsonl","rules/structured/metrics.jsonl"],"includes_system_scenario_anchors":true,"method":"strict_schema_high_weight_cases","case_shapes":["trained_format_with_rule_summaries","sparse_probe_without_rule_text","exact_schema_prompt"],"default_max_steps":640}' \
+  --manifest-extra-json '{"rule_sources":["rules/datasets/train_seed.jsonl","rules/datasets/eval_cases.jsonl","rules/structured/rules.jsonl","rules/structured/metrics.jsonl"],"includes_system_scenario_anchors":true,"runtime_input_format":"compact_v2","worker_prompt_protocol":"WorkerDecisionV1 compact table payload","method":"strict_schema_high_weight_cases","case_shapes":["trained_format_with_rule_summaries","sparse_probe_without_rule_text","exact_schema_prompt"],"default_max_steps":640}' \
   "$@"

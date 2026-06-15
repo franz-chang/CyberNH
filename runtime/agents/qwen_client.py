@@ -3,6 +3,7 @@ from typing import Type
 
 from pydantic import BaseModel
 
+from .compact_payload import compact_worker_payload
 from .llm_config import load_llm_config
 
 
@@ -53,7 +54,7 @@ class QwenOpenAICompatibleClient:
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": json.dumps(_runtime_payload(observation), ensure_ascii=False),
+                "content": json.dumps(_runtime_payload(observation), ensure_ascii=False, separators=(",", ":")),
             },
         ]
         kwargs = {
@@ -122,12 +123,7 @@ def _model_validate(schema: Type[BaseModel], payload: dict) -> BaseModel:
 def _runtime_payload(observation: dict) -> dict:
     agent_type = observation.get("agentType")
     if agent_type == "Worker-Agent":
-        output_schema = _worker_decision_schema(observation)
-        important = [
-            "Use exactly these keys: agent_id, action, target_demand_id, reason, confidence, memory_update.",
-            "Only observation.candidateDemands is assignable. Ignore any demand IDs not listed there.",
-            "If no candidate demand is suitable, use action=reject_all and target_demand_id=null.",
-        ]
+        return compact_worker_payload(observation)
     elif agent_type == "Senior-Agent":
         output_schema = _senior_decision_schema(observation)
         important = [

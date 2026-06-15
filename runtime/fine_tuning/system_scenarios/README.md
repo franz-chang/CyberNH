@@ -33,7 +33,9 @@ run_lora_finetune.sh      # Project-aware wrapper for the external CyberNH-LLM v
 evaluate_adapter.py       # Load check and behavior evaluation for the running LLM
 ```
 
-Each JSONL record has this shape:
+The original seed records are compact and readable. After conversion, the current runtime-shaped worker payload follows the shorter `compact_v2` protocol, where fixed schema rules are placed in the system prompt and the user message mainly carries dynamic state plus the demand table.
+
+Each seed JSONL record has this shape:
 
 ```json
 {
@@ -96,7 +98,7 @@ runtime/fine_tuning/system_scenarios/run_lora_finetune.sh --dry-run
 
 ## Train LoRA Adapter
 
-Default output:
+Default standalone scenario-adapter output:
 
 ```text
 /Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
@@ -123,7 +125,7 @@ For a smoke test:
 runtime/fine_tuning/system_scenarios/run_lora_finetune.sh --max-steps 1 --epochs 1
 ```
 
-Current completed adapter:
+Historical standalone scenario adapter:
 
 ```text
 /Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
@@ -135,11 +137,11 @@ eval_loss=1.7205
 behavior_eval=6/6 passed
 ```
 
-Behavior evaluation is stricter than token loss: it checks whether the model follows each scenario tag in a runtime-shaped request and returns the expected structured action. The latest regression result proves the adapter is loaded and passes the current scenario-tag behavior suite.
+Behavior evaluation is stricter than token loss: it checks whether the model follows each scenario tag in a runtime-shaped request and returns the expected structured action. The standalone scenario adapter is mainly useful for ablation or incremental training. In the current project workflow, its behavior has been carried forward into the default `rules-lora` adapter together with the rules dataset.
 
 ## Use Adapter
 
-The external LLM `.env` is currently configured with:
+If you want to serve the standalone scenario adapter directly, set:
 
 ```bash
 CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
