@@ -8,6 +8,11 @@ DEFAULT_PORT="${PORT:-4173}"
 DEFAULT_LLM_DIR="$(cd "$ROOT_DIR/.." && pwd)/$(basename "$ROOT_DIR")-LLM"
 LLM_DIR="${CYBERNH_LLM_DIR:-$DEFAULT_LLM_DIR}"
 export CYBERNH_LLM_DIR="$LLM_DIR"
+DEFAULT_LLM_MODEL="qwen3-vl-2b-instruct"
+DEFAULT_LLM_MODEL_ID="Qwen/Qwen3-VL-2B-Instruct"
+DEFAULT_LLM_MODEL_DIR="$LLM_DIR/models/Qwen3-VL-2B-Instruct"
+DEFAULT_RULES_ADAPTER_DIR="$LLM_DIR/adapters/rules-lora"
+DEFAULT_SCENARIO_ADAPTER_DIR="$LLM_DIR/adapters/system-scenarios-lora"
 LLM_LOG_DIR="$ROOT_DIR/runtime/logs"
 LLM_LOG_FILE="$LLM_LOG_DIR/llm-serve.log"
 LLM_START_MODE="${CYBERNH_START_LLM:-auto}"
@@ -35,6 +40,32 @@ load_env_defaults() {
       export "$key=$value"
     fi
   done < "$env_file"
+}
+
+set_env_if_unset() {
+  local key="$1"
+  local value="$2"
+  if [[ -z "${!key+x}" ]]; then
+    export "$key=$value"
+  fi
+}
+
+set_local_2b_defaults() {
+  set_env_if_unset CYBERNH_LLM_PROVIDER "modelscope-transformers"
+  set_env_if_unset CYBERNH_LLM_MODEL "$DEFAULT_LLM_MODEL"
+  set_env_if_unset CYBERNH_LLM_MODEL_ID "$DEFAULT_LLM_MODEL_ID"
+  set_env_if_unset CYBERNH_LLM_LOCAL_DIR "$DEFAULT_LLM_MODEL_DIR"
+  set_env_if_unset CYBERNH_LLM_BASE_URL "http://localhost:8000/v1"
+  set_env_if_unset CYBERNH_LLM_API_KEY "EMPTY"
+  set_env_if_unset CYBERNH_DEFAULT_AGENT_DECISION_MODE "llm_required"
+
+  if [[ -z "${CYBERNH_LLM_ADAPTER_DIR+x}" ]]; then
+    if [[ -d "$DEFAULT_RULES_ADAPTER_DIR" ]]; then
+      export CYBERNH_LLM_ADAPTER_DIR="$DEFAULT_RULES_ADAPTER_DIR"
+    elif [[ -d "$DEFAULT_SCENARIO_ADAPTER_DIR" ]]; then
+      export CYBERNH_LLM_ADAPTER_DIR="$DEFAULT_SCENARIO_ADAPTER_DIR"
+    fi
+  fi
 }
 
 if ! command -v node >/dev/null 2>&1; then
@@ -149,6 +180,75 @@ process.stdin.on("end", () => {
 ' "$field"
 }
 
+json_first_model_id() {
+  node -e '
+let input = "";
+process.stdin.on("data", chunk => input += chunk);
+process.stdin.on("end", () => {
+  try {
+    const parsed = JSON.parse(input);
+    const value = parsed && parsed.data && parsed.data[0] && parsed.data[0].id;
+    if (value !== undefined && value !== null) process.stdout.write(String(value));
+  } catch {}
+});
+'
+}
+
+llm_endpoint_model() {
+  local base_url="${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
+  local health model models_json
+  base_url="${base_url%/}"
+
+  health="$(llm_health_json || true)"
+  model="$(printf '%s' "$health" | json_field model)"
+  if [[ -n "$model" ]]; then
+    echo "$model"
+    return 0
+  fi
+
+  models_json="$(
+    curl -fsS --max-time 5 \
+      -H "Authorization: Bearer ${CYBERNH_LLM_API_KEY:-EMPTY}" \
+      "$base_url/models" 2>/dev/null || true
+  )"
+  printf '%s' "$models_json" | json_first_model_id
+}
+
+verify_expected_llm_model() {
+  local expected_model="${CYBERNH_LLM_MODEL:-$DEFAULT_LLM_MODEL}"
+  local running_model
+  running_model="$(llm_endpoint_model || true)"
+  if [[ -z "$running_model" ]]; then
+    return 0
+  fi
+  if [[ "$running_model" != "$expected_model" ]]; then
+    echo "Error: LLM endpoint model mismatch."
+    echo "Expected: $expected_model"
+    echo "Running:  $running_model"
+    return 1
+  fi
+  echo "LLM model verified: $running_model"
+}
+
+stop_llm_listener() {
+  local pid
+  pid="$(llm_listener_pid || true)"
+  [[ -n "$pid" ]] || return 0
+
+  echo "Stopping existing local LLM server pid=$pid"
+  kill "$pid" >/dev/null 2>&1 || true
+  for _ in {1..30}; do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  if kill -0 "$pid" >/dev/null 2>&1; then
+    echo "Force stopping local LLM server pid=$pid"
+    kill -9 "$pid" >/dev/null 2>&1 || true
+  fi
+}
+
 verify_scenario_adapter() {
   if ! should_require_scenario_adapter; then
     return 0
@@ -161,7 +261,7 @@ verify_scenario_adapter() {
 
   if [[ -z "$loaded_adapter" ]]; then
     echo "Error: CYBERNH_SYSTEM_PROMPT_MODE=$PROMPT_MODE uses short scenario tags, but the LLM health endpoint did not report a loaded adapter."
-    echo "Set CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora, or run with:"
+    echo "Set CYBERNH_LLM_ADAPTER_DIR=$DEFAULT_RULES_ADAPTER_DIR, or run with:"
     echo "  CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh"
     exit 1
   fi
@@ -213,7 +313,7 @@ should_attempt_llm_start() {
 }
 
 check_llm_assets() {
-  local model_dir="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-VL-2B-Instruct}"
+  local model_dir="${CYBERNH_LLM_LOCAL_DIR:-$DEFAULT_LLM_MODEL_DIR}"
   if [[ ! -x "$LLM_DIR/.venv/bin/python" ]]; then
     echo "LLM virtualenv is missing: $LLM_DIR/.venv"
     echo "Run: $LLM_DIR/setup_modelscope.sh"
@@ -247,8 +347,17 @@ start_llm_if_needed() {
   fi
 
   if llm_endpoint_ready; then
-    echo "LLM endpoint is already reachable: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
-    return
+    if verify_expected_llm_model; then
+      echo "LLM endpoint is already reachable: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
+      return
+    fi
+
+    if should_attempt_llm_start && is_local_llm_url; then
+      stop_llm_listener
+    else
+      echo "Set CYBERNH_START_LLM=1 and use a local endpoint to restart with ${CYBERNH_LLM_MODEL:-$DEFAULT_LLM_MODEL}."
+      exit 1
+    fi
   fi
 
   if ! should_attempt_llm_start; then
@@ -265,6 +374,11 @@ start_llm_if_needed() {
   mkdir -p "$LLM_LOG_DIR"
   : > "$LLM_LOG_FILE"
   echo "Starting local LLM server in background..."
+  echo "LLM model: ${CYBERNH_LLM_MODEL:-$DEFAULT_LLM_MODEL}"
+  echo "LLM model dir: ${CYBERNH_LLM_LOCAL_DIR:-$DEFAULT_LLM_MODEL_DIR}"
+  if [[ -n "${CYBERNH_LLM_ADAPTER_DIR:-}" ]]; then
+    echo "LLM adapter: $CYBERNH_LLM_ADAPTER_DIR"
+  fi
   echo "LLM log: $LLM_LOG_FILE"
   "$LLM_DIR/serve_transformers.sh" >"$LLM_LOG_FILE" 2>&1 &
   LLM_PID="$!"
@@ -272,6 +386,7 @@ start_llm_if_needed() {
   echo "Waiting for LLM endpoint, timeout=${LLM_READY_TIMEOUT_SECONDS}s..."
   if wait_for_llm_endpoint; then
     LLM_PID="$(llm_listener_pid || true)"
+    verify_expected_llm_model
     echo "LLM endpoint is reachable: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
     return
   fi
@@ -301,6 +416,7 @@ if [[ ! -d node_modules ]]; then
   npm install
 fi
 
+set_local_2b_defaults
 load_env_defaults "$LLM_DIR/.env"
 load_env_defaults "$ROOT_DIR/config/deepseek.env"
 PROMPT_MODE="${CYBERNH_SYSTEM_PROMPT_MODE:-scenario_alias}"

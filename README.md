@@ -211,6 +211,35 @@ Python venv:    /Users/chongzhang/CyberNH-LLM/.venv
 
 LLM 目录是一个独立运行目录，不随 Git 仓库提交。这样可以避免把模型权重、虚拟环境、下载缓存和日志推到 GitHub。
 
+### 2B-Instruct 驱动模型处理流程
+
+项目中用于驱动 Agent 决策的基础模型是 `Qwen/Qwen3-VL-2B-Instruct`。我们没有把模型权重放入 Git 仓库，而是将它作为外部运行资产放在同级 `CyberNH-LLM` 目录中，由 ModelScope 下载脚本负责获取和更新。仓库内只保留启动脚本、提示词、数据集、微调脚本和评估脚本。
+
+2B-Instruct 的处理流程分为四步：
+
+1. **模型部署**：使用 `download_model.sh` 从 ModelScope 下载 `Qwen/Qwen3-VL-2B-Instruct`，并通过外部 `.env` 指定 `CYBERNH_LLM_LOCAL_DIR`、`CYBERNH_LLM_MODEL` 和 endpoint 配置。
+2. **服务封装**：使用 Transformers 后端加载本地模型，并通过 `serve_transformers_openai.py` 包装成 OpenAI-compatible 服务，提供 `/v1/models`、`/v1/chat/completions` 和 `/health` 接口。CyberNH 只依赖这个标准接口，不直接耦合底层推理实现。
+3. **System Scenario 适配**：将 Worker / Senior / Assistant 的长 system prompt 压缩成 `[System Scenario 1]`、`[System Scenario 2]`、`[System Scenario 3]` 三个短标记，并用 runtime-shaped LoRA 数据让 2B-Instruct 学会这些短标记背后的结构化决策协议。
+4. **规则适配**：将 `rules/` 中从规则 PDF 抽取、结构化后的优先级、抢占、双人任务、隐性工作量和指标规则转换为监督样本，再训练 rules LoRA，使 2B-Instruct 在不反复发送长规则文本的情况下仍能输出符合规则的 JSON 决策。
+
+因此，运行时的 2B-Instruct 不是裸基模直接决策，而是经过以下约束链路：
+
+```text
+Qwen3-VL-2B-Instruct
+  -> OpenAI-compatible local endpoint
+  -> System Scenario prompt-compression adapter
+  -> rules / priority-reasoning adapter
+  -> CyberNH structured Agent decision JSON
+```
+
+当使用本地 2B-Instruct + adapter 驱动时，项目默认发送短 scenario 标记以减少 prompt token 开销。如果没有加载对应 adapter，或需要做保守对照实验，可以切回完整 system prompt：
+
+```bash
+CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh
+```
+
+需要注意的是，LoRA adapter 与基模结构绑定。针对 `Qwen3-VL-2B-Instruct` 训练得到的 adapter 不能直接挂到 `Qwen3-VL-4B-Instruct` 上；如果切换到 4B，需要使用同一数据流程重新训练对应 adapter。
+
 当前外部 LLM 目录应包含：
 
 ```text
