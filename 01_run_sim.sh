@@ -12,6 +12,8 @@ DEFAULT_LLM_MODEL="qwen3-vl-2b-instruct"
 DEFAULT_LLM_MODEL_ID="Qwen/Qwen3-VL-2B-Instruct"
 DEFAULT_LLM_MODEL_DIR="$LLM_DIR/models/Qwen3-VL-2B-Instruct"
 DEFAULT_RULES_ADAPTER_DIR="$LLM_DIR/adapters/rules-lora"
+DEEPSEEK_DECISION_MODE="deepseek_api"
+LOCAL_DEEPSEEK_V4_FLASH_DECISION_MODE="local_deepseek_v4_flash"
 LLM_LOG_DIR="$ROOT_DIR/runtime/logs"
 LLM_LOG_FILE="$LLM_LOG_DIR/llm-serve.log"
 LLM_START_MODE="${CYBERNH_START_LLM:-auto}"
@@ -117,7 +119,7 @@ prompt_mode_uses_aliases() {
 }
 
 should_require_scenario_adapter() {
-  if uses_deepseek_api; then
+  if uses_remote_api_mode; then
     return 1
   fi
 
@@ -140,7 +142,70 @@ should_require_scenario_adapter() {
 }
 
 uses_deepseek_api() {
-  [[ "${CYBERNH_DEFAULT_AGENT_DECISION_MODE:-llm_required}" == "deepseek_api" ]]
+  [[ "${CYBERNH_DEFAULT_AGENT_DECISION_MODE:-llm_required}" == "$DEEPSEEK_DECISION_MODE" ]]
+}
+
+uses_local_deepseek_v4_flash() {
+  [[ "${CYBERNH_DEFAULT_AGENT_DECISION_MODE:-llm_required}" == "$LOCAL_DEEPSEEK_V4_FLASH_DECISION_MODE" ]]
+}
+
+uses_remote_api_mode() {
+  uses_deepseek_api || uses_local_deepseek_v4_flash
+}
+
+remote_api_key_env_name() {
+  if uses_deepseek_api; then
+    echo "CYBERNH_DEEPSEEK_API_KEY"
+    return
+  fi
+  if uses_local_deepseek_v4_flash; then
+    echo "CYBERNH_LOCAL_DEEPSEEK_API_KEY"
+    return
+  fi
+}
+
+remote_api_key_value() {
+  if uses_deepseek_api; then
+    printf '%s' "${CYBERNH_DEEPSEEK_API_KEY:-}"
+    return
+  fi
+  if uses_local_deepseek_v4_flash; then
+    printf '%s' "${CYBERNH_LOCAL_DEEPSEEK_API_KEY:-}"
+    return
+  fi
+}
+
+remote_api_mode_label() {
+  if uses_deepseek_api; then
+    echo "DeepSeek API"
+    return
+  fi
+  if uses_local_deepseek_v4_flash; then
+    echo "Local DeepSeek-V4-Flash"
+    return
+  fi
+}
+
+remote_api_base_url() {
+  if uses_deepseek_api; then
+    printf '%s' "${CYBERNH_DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
+    return
+  fi
+  if uses_local_deepseek_v4_flash; then
+    printf '%s' "${CYBERNH_LOCAL_DEEPSEEK_BASE_URL:-https://uni-api.cstcloud.cn/v1}"
+    return
+  fi
+}
+
+remote_api_model() {
+  if uses_deepseek_api; then
+    printf '%s' "${CYBERNH_DEEPSEEK_MODEL:-deepseek-v4-flash}"
+    return
+  fi
+  if uses_local_deepseek_v4_flash; then
+    printf '%s' "${CYBERNH_LOCAL_DEEPSEEK_MODEL:-deepseek-v4-flash}"
+    return
+  fi
 }
 
 llm_endpoint_ready() {
@@ -346,11 +411,17 @@ wait_for_llm_endpoint() {
 }
 
 start_llm_if_needed() {
-  if uses_deepseek_api && [[ -z "${CYBERNH_DEEPSEEK_API_KEY:-}" ]]; then
-    echo "Warning: CYBERNH_DEEPSEEK_API_KEY is not set. DeepSeek requests will fail until it is configured."
+  if uses_remote_api_mode; then
+    local api_key_env api_key_value api_label
+    api_key_env="$(remote_api_key_env_name)"
+    api_key_value="$(remote_api_key_value)"
+    api_label="$(remote_api_mode_label)"
+    if [[ -z "$api_key_value" ]]; then
+      echo "Warning: ${api_key_env:-API key} is not set. $api_label requests will fail until it is configured."
+    fi
   fi
 
-  if uses_deepseek_api && [[ "$LLM_START_MODE" == "auto" ]]; then
+  if uses_remote_api_mode && [[ "$LLM_START_MODE" == "auto" ]]; then
     if llm_endpoint_ready; then
       local running_model expected_model
       expected_model="${CYBERNH_LLM_MODEL:-$DEFAULT_LLM_MODEL}"
@@ -362,7 +433,7 @@ start_llm_if_needed() {
       fi
       echo "Optional local Qwen endpoint is already reachable: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
     else
-      echo "DeepSeek API mode detected; skipping local Qwen auto-start."
+      echo "$(remote_api_mode_label) mode detected; skipping local Qwen auto-start."
     fi
     return 0
   fi
@@ -440,6 +511,7 @@ fi
 set_local_2b_defaults
 load_env_defaults "$LLM_DIR/.env"
 load_env_defaults "$ROOT_DIR/config/deepseek.env"
+load_env_defaults "$ROOT_DIR/config/local_deepseek_v4_flash.env"
 PROMPT_MODE="${CYBERNH_SYSTEM_PROMPT_MODE:-scenario_alias}"
 REQUIRE_SCENARIO_ADAPTER="${CYBERNH_REQUIRE_SCENARIO_ADAPTER:-auto}"
 LLM_START_MODE="${CYBERNH_START_LLM:-auto}"
@@ -453,10 +525,10 @@ export PORT
 
 echo "Starting Cyber-NH from: $ROOT_DIR"
 echo "Dashboard URL: http://localhost:$PORT"
-if uses_deepseek_api; then
-  echo "Default LLM provider: DeepSeek API"
-  echo "DeepSeek endpoint: ${CYBERNH_DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
-  echo "DeepSeek model: ${CYBERNH_DEEPSEEK_MODEL:-deepseek-v4-flash}"
+if uses_remote_api_mode; then
+  echo "Default LLM provider: $(remote_api_mode_label)"
+  echo "Remote endpoint: $(remote_api_base_url)"
+  echo "Remote model: $(remote_api_model)"
   if llm_endpoint_ready; then
     echo "Optional local Qwen endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
     echo "Optional local Qwen model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"

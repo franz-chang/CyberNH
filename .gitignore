@@ -10,6 +10,7 @@ venv/
 .env.*
 !.env.example
 config/deepseek.env
+config/local_deepseek_v4_flash.env
 runtime/logs/
 runtime/*.pid
 runtime/fine_tuning/**/outputs/

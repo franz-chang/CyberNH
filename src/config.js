@@ -532,6 +532,7 @@ const DEFAULT_CONFIG = {
     "rule_only",
     "llm_required",
     "deepseek_api",
+    "local_deepseek_v4_flash",
   ]),
   workerAgentLlmEnabled: envBoolean("CYBERNH_DEFAULT_WORKER_AGENT_LLM_ENABLED", true),
   seniorAgentLlmEnabled: envBoolean("CYBERNH_DEFAULT_SENIOR_AGENT_LLM_ENABLED", false),

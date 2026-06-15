@@ -1384,7 +1384,7 @@ function normalizeConfig(input) {
   config.assistantAgentEnabled = Boolean(config.assistantAgentEnabled);
   config.seniorAgentLlmEnabled = Boolean(config.seniorAgentLlmEnabled);
   config.workerAgentLlmEnabled = Boolean(config.workerAgentLlmEnabled);
-  config.agentDecisionMode = ["rule_only", "llm_required", "deepseek_api"].includes(config.agentDecisionMode)
+  config.agentDecisionMode = ["rule_only", "llm_required", "deepseek_api", "local_deepseek_v4_flash"].includes(config.agentDecisionMode)
     ? config.agentDecisionMode
     : "llm_required";
   return config;

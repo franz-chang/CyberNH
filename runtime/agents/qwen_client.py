@@ -47,8 +47,8 @@ class QwenOpenAICompatibleClient:
         )
 
     def complete_json(self, system_prompt: str, observation: dict, schema: Type[BaseModel]) -> BaseModel:
-        if self.cfg.provider == "deepseek" and not self.cfg.api_key:
-            raise RuntimeError("CYBERNH_DEEPSEEK_API_KEY is required for DeepSeek API mode")
+        if not self.cfg.api_key:
+            raise RuntimeError(f"{self.cfg.api_key_env} is required for {self.cfg.provider_label} mode")
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -61,12 +61,20 @@ class QwenOpenAICompatibleClient:
             "model": self.cfg.model,
             "messages": messages,
             "temperature": self.cfg.temperature,
-            "max_tokens": self.cfg.max_tokens,
         }
+        extra_body = {}
+        if self.cfg.request_max_tokens_key == "max_tokens":
+            kwargs["max_tokens"] = self.cfg.max_tokens
+        else:
+            extra_body[self.cfg.request_max_tokens_key] = self.cfg.max_tokens
         if self.cfg.json_mode:
             kwargs["response_format"] = {"type": "json_object"}
         if self.cfg.provider == "deepseek" and self.cfg.thinking and self.cfg.thinking != "default":
             kwargs["thinking"] = {"type": self.cfg.thinking}
+        if self.cfg.chat_template_kwargs:
+            extra_body["chat_template_kwargs"] = self.cfg.chat_template_kwargs
+        if extra_body:
+            kwargs["extra_body"] = extra_body
         completion = self.client.chat.completions.create(**kwargs)
         content = completion.choices[0].message.content or "{}"
         parsed = json.loads(_extract_json_object(_strip_json_fence(content)))

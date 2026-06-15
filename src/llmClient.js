@@ -5,6 +5,7 @@ const PROMPT_MODE_ENV = "CYBERNH_SYSTEM_PROMPT_MODE";
 const ALIAS_PROMPT_MODES = new Set(["alias", "aliases", "scenario", "scenario_alias", "short"]);
 const FULL_PROMPT_MODES = new Set(["full", "legacy", "long"]);
 const DEEPSEEK_DECISION_MODE = "deepseek_api";
+const LOCAL_DEEPSEEK_V4_FLASH_DECISION_MODE = "local_deepseek_v4_flash";
 const LLM_INPUT_FORMAT_ENV = "CYBERNH_LLM_INPUT_FORMAT";
 const LLM_INPUT_FORMATS = new Set(["compact", "compact_v2", "compact_v1", "legacy"]);
 const WORKER_DECISION_SCHEMA = "WorkerDecisionV1";
@@ -49,33 +50,69 @@ function envBoolean(name, fallback) {
   return /^(1|true|yes|on)$/i.test(value);
 }
 
+function normalizedRemoteApiKey(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^(YOUR-CSTCLOUD-API-KEY|sk-your-deepseek-api-key|your-api-key|placeholder)$/i.test(text)) return "";
+  return text;
+}
+
 function llmInputFormat() {
   const value = String(process.env[LLM_INPUT_FORMAT_ENV] || "compact").trim().toLowerCase();
   if (!LLM_INPUT_FORMATS.has(value)) return "compact_v2";
   return value === "compact" ? "compact_v2" : value;
 }
 
+function activeDecisionMode(options = {}) {
+  if (options.decisionMode) return String(options.decisionMode);
+  if (process.env.CYBERNH_DEFAULT_AGENT_DECISION_MODE) return String(process.env.CYBERNH_DEFAULT_AGENT_DECISION_MODE);
+  return "";
+}
+
 function isDeepSeekMode(options = {}) {
-  if (options.decisionMode) return options.decisionMode === DEEPSEEK_DECISION_MODE;
   if (options.provider) return String(options.provider).toLowerCase() === "deepseek";
-  if (process.env.CYBERNH_DEFAULT_AGENT_DECISION_MODE) {
-    return process.env.CYBERNH_DEFAULT_AGENT_DECISION_MODE === DEEPSEEK_DECISION_MODE;
-  }
-  return String(process.env.CYBERNH_LLM_PROVIDER || "").toLowerCase() === "deepseek";
+  return activeDecisionMode(options) === DEEPSEEK_DECISION_MODE;
+}
+
+function isLocalDeepSeekV4FlashMode(options = {}) {
+  if (options.provider) return String(options.provider).toLowerCase() === "cstcloud-deepseek";
+  return activeDecisionMode(options) === LOCAL_DEEPSEEK_V4_FLASH_DECISION_MODE;
 }
 
 function loadLlmConfig(options = {}) {
   if (isDeepSeekMode(options)) {
     return {
       provider: "deepseek",
+      providerLabel: "DeepSeek API",
       model: process.env.CYBERNH_DEEPSEEK_MODEL || "deepseek-v4-flash",
       baseUrl: process.env.CYBERNH_DEEPSEEK_BASE_URL || "https://api.deepseek.com",
-      apiKey: process.env.CYBERNH_DEEPSEEK_API_KEY || "",
+      apiKey: normalizedRemoteApiKey(process.env.CYBERNH_DEEPSEEK_API_KEY),
+      apiKeyEnv: "CYBERNH_DEEPSEEK_API_KEY",
       temperature: envNumber("CYBERNH_DEEPSEEK_TEMPERATURE", 0),
       maxTokens: envNumber("CYBERNH_DEEPSEEK_MAX_TOKENS", 512),
       timeoutSeconds: envNumber("CYBERNH_DEEPSEEK_TIMEOUT_SECONDS", 120),
       jsonMode: envBoolean("CYBERNH_DEEPSEEK_JSON_MODE", true),
       thinking: process.env.CYBERNH_DEEPSEEK_THINKING || "disabled",
+      requestMaxTokensKey: "max_tokens",
+      forceFullSystemPrompt: true,
+      inputFormat: llmInputFormat(),
+    };
+  }
+
+  if (isLocalDeepSeekV4FlashMode(options)) {
+    return {
+      provider: "cstcloud-deepseek",
+      providerLabel: "CSTCloud DeepSeek-V4-Flash",
+      model: process.env.CYBERNH_LOCAL_DEEPSEEK_MODEL || "deepseek-v4-flash",
+      baseUrl: process.env.CYBERNH_LOCAL_DEEPSEEK_BASE_URL || "https://uni-api.cstcloud.cn/v1",
+      apiKey: normalizedRemoteApiKey(process.env.CYBERNH_LOCAL_DEEPSEEK_API_KEY),
+      apiKeyEnv: "CYBERNH_LOCAL_DEEPSEEK_API_KEY",
+      temperature: envNumber("CYBERNH_LOCAL_DEEPSEEK_TEMPERATURE", 0),
+      maxTokens: envNumber("CYBERNH_LOCAL_DEEPSEEK_MAX_TOKENS", 512),
+      timeoutSeconds: envNumber("CYBERNH_LOCAL_DEEPSEEK_TIMEOUT_SECONDS", 120),
+      jsonMode: envBoolean("CYBERNH_LOCAL_DEEPSEEK_JSON_MODE", false),
+      thinking: envBoolean("CYBERNH_LOCAL_DEEPSEEK_THINKING", false),
+      requestMaxTokensKey: "max_length",
       forceFullSystemPrompt: true,
       inputFormat: llmInputFormat(),
     };
@@ -83,13 +120,17 @@ function loadLlmConfig(options = {}) {
 
   return {
     provider: process.env.CYBERNH_LLM_PROVIDER || "modelscope-transformers",
+    providerLabel: "Local Qwen",
     model: process.env.CYBERNH_LLM_MODEL || "qwen3-vl-2b-instruct",
     baseUrl: process.env.CYBERNH_LLM_BASE_URL || "http://localhost:8000/v1",
     apiKey: process.env.CYBERNH_LLM_API_KEY || "EMPTY",
+    apiKeyEnv: "CYBERNH_LLM_API_KEY",
     temperature: envNumber("CYBERNH_LLM_TEMPERATURE", 0),
     maxTokens: envNumber("CYBERNH_LLM_MAX_TOKENS", 5096),
     timeoutSeconds: envNumber("CYBERNH_LLM_TIMEOUT_SECONDS", 120),
     jsonMode: envBoolean("CYBERNH_LLM_JSON_MODE", true),
+    thinking: null,
+    requestMaxTokensKey: "max_tokens",
     forceFullSystemPrompt: false,
     inputFormat: llmInputFormat(),
   };
@@ -146,11 +187,11 @@ async function decideWorkerWithLlm(observation, options = {}) {
 }
 
 async function completeOnce(cfg, requestPayload) {
-  if (cfg.provider === "deepseek" && !cfg.apiKey) {
+  if (cfg.apiKeyEnv && !cfg.apiKey) {
     return {
       ok: false,
       rawReply: null,
-      error: "CYBERNH_DEEPSEEK_API_KEY is required for DeepSeek API mode",
+      error: `${cfg.apiKeyEnv} is required for ${cfg.providerLabel || cfg.provider} mode`,
     };
   }
 
@@ -198,6 +239,9 @@ function describeHttpError(cfg, status) {
   if (cfg.provider === "deepseek" && status === 401) {
     return "DeepSeek API returned 401 Unauthorized; check CYBERNH_DEEPSEEK_API_KEY";
   }
+  if (cfg.provider === "cstcloud-deepseek" && status === 401) {
+    return "CSTCloud DeepSeek-V4-Flash returned 401 Unauthorized; check CYBERNH_LOCAL_DEEPSEEK_API_KEY";
+  }
   if (cfg.provider !== "deepseek" && status === 401) {
     return "Local Qwen endpoint returned 401; check CYBERNH_LLM_API_KEY matches the running LLM server";
   }
@@ -207,11 +251,14 @@ function describeHttpError(cfg, status) {
 function describeRequestError(cfg, error) {
   if (error.name === "AbortError") return `LLM request timed out after ${cfg.timeoutSeconds}s`;
   const code = error.cause?.code || error.code || "";
-  if (cfg.provider !== "deepseek" && (code === "ECONNREFUSED" || error.message === "fetch failed")) {
+  if (cfg.provider === "modelscope-transformers" && (code === "ECONNREFUSED" || error.message === "fetch failed")) {
     return `Local Qwen endpoint is not reachable at ${cfg.baseUrl}; start it with ./S1_Start_llm.sh or ./01_run_sim.sh`;
   }
   if (cfg.provider === "deepseek" && (code === "ECONNREFUSED" || error.message === "fetch failed")) {
     return `DeepSeek API endpoint is not reachable at ${cfg.baseUrl}`;
+  }
+  if (cfg.provider === "cstcloud-deepseek" && (code === "ECONNREFUSED" || error.message === "fetch failed")) {
+    return `CSTCloud DeepSeek-V4-Flash endpoint is not reachable at ${cfg.baseUrl}`;
   }
   return error.message;
 }
@@ -232,11 +279,14 @@ function buildRequestPayload(cfg, observation) {
     model: cfg.model,
     messages,
     temperature: cfg.temperature,
-    max_tokens: cfg.maxTokens,
   };
+  payload[cfg.requestMaxTokensKey || "max_tokens"] = cfg.maxTokens;
   if (cfg.jsonMode) payload.response_format = { type: "json_object" };
   if (cfg.provider === "deepseek" && cfg.thinking && cfg.thinking !== "default") {
     payload.thinking = { type: cfg.thinking };
+  }
+  if (cfg.provider === "cstcloud-deepseek" && cfg.thinking) {
+    payload.chat_template_kwargs = { thinking: true };
   }
   return payload;
 }
@@ -649,6 +699,7 @@ function extractJsonObject(text) {
 function publicConfig(cfg) {
   return {
     provider: cfg.provider,
+    providerLabel: cfg.providerLabel,
     model: cfg.model,
     baseUrl: cfg.baseUrl,
     apiKeyConfigured: Boolean(cfg.apiKey),
@@ -667,4 +718,5 @@ module.exports = {
   loadLlmConfig,
   publicLlmConfig: publicConfig,
   DEEPSEEK_DECISION_MODE,
+  LOCAL_DEEPSEEK_V4_FLASH_DECISION_MODE,
 };

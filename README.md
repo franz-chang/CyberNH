@@ -137,6 +137,36 @@ CYBERNH_DEEPSEEK_THINKING=disabled
 
 也可以在前端 `照护策略 -> Agent 决策` 中切换到 `DeepSeek API 驱动`。该模式使用 DeepSeek 的 OpenAI-compatible `/chat/completions` 接口，并开启 JSON Output。
 
+### 3.1 使用本地 DeepSeek-V4-Flash 驱动 Agent 决策
+
+项目现已增加 `本地 DeepSeek-V4-Flash` 分支。这里的“本地”指的是你本机项目直接调用中国科技云 Uni-API，而不是启动本地权重服务。
+
+配置文件位于：
+
+```text
+config/local_deepseek_v4_flash.env
+```
+
+示例模板位于：
+
+```text
+config/local_deepseek_v4_flash.env.example
+```
+
+当前默认配置遵循中国科技云文档：
+
+- `BASE_URL`: `https://uni-api.cstcloud.cn/v1`
+- `model`: `deepseek-v4-flash`
+- 文档链接: `https://uni-api.cstcloud.cn/doc/llm/`
+
+这一分支会：
+
+- 使用完整 system prompt，而不是本地 LoRA 短标记模式
+- 请求体改用 Uni-API 文档中的 `max_length`
+- 如启用思考，会发送 `chat_template_kwargs: {"thinking": true}`
+
+前端中可以直接在 `照护策略 -> Agent 决策` 里切换到 `本地 DeepSeek-V4-Flash`。
+
 ### 4. 只启动本地 LLM
 
 ```bash

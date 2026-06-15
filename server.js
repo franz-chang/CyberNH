@@ -8,6 +8,7 @@ const LLM_DIR = process.env.CYBERNH_LLM_DIR || DEFAULT_LLM_DIR;
 
 loadEnvFile(path.join(LLM_DIR, ".env"));
 loadEnvFile(path.join(__dirname, "config", "deepseek.env"));
+loadEnvFile(path.join(__dirname, "config", "local_deepseek_v4_flash.env"));
 loadEnvFile(path.join(__dirname, ".env"));
 
 const { CyberNHSimulation } = require("./src/simulation");
