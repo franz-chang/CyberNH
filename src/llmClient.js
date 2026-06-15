@@ -188,10 +188,16 @@ async function decideWorkerWithLlm(observation, options = {}) {
 
 async function completeOnce(cfg, requestPayload) {
   if (cfg.apiKeyEnv && !cfg.apiKey) {
+    let configHint = "";
+    if (cfg.provider === "cstcloud-deepseek") {
+      configHint = "; edit config/local_deepseek_v4_flash.env and replace the placeholder API key";
+    } else if (cfg.provider === "deepseek") {
+      configHint = "; edit config/deepseek.env and set a real API key";
+    }
     return {
       ok: false,
       rawReply: null,
-      error: `${cfg.apiKeyEnv} is required for ${cfg.providerLabel || cfg.provider} mode`,
+      error: `${cfg.apiKeyEnv} is missing or still a placeholder for ${cfg.providerLabel || cfg.provider} mode${configHint}`,
     };
   }
 

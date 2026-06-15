@@ -48,7 +48,14 @@ class QwenOpenAICompatibleClient:
 
     def complete_json(self, system_prompt: str, observation: dict, schema: Type[BaseModel]) -> BaseModel:
         if not self.cfg.api_key:
-            raise RuntimeError(f"{self.cfg.api_key_env} is required for {self.cfg.provider_label} mode")
+            config_hint = ""
+            if self.cfg.provider == "cstcloud-deepseek":
+                config_hint = "; edit config/local_deepseek_v4_flash.env and replace the placeholder API key"
+            elif self.cfg.provider == "deepseek":
+                config_hint = "; edit config/deepseek.env and set a real API key"
+            raise RuntimeError(
+                f"{self.cfg.api_key_env} is missing or still a placeholder for {self.cfg.provider_label} mode{config_hint}"
+            )
 
         messages = [
             {"role": "system", "content": system_prompt},
