@@ -90,7 +90,7 @@ def load_llm_config(decision_mode: str | None = None, provider: str | None = Non
             api_key=_normalized_remote_api_key(os.getenv("CYBERNH_LOCAL_DEEPSEEK_API_KEY", "")),
             api_key_env="CYBERNH_LOCAL_DEEPSEEK_API_KEY",
             temperature=float(os.getenv("CYBERNH_LOCAL_DEEPSEEK_TEMPERATURE", "0")),
-            max_tokens=int(os.getenv("CYBERNH_LOCAL_DEEPSEEK_MAX_TOKENS", "512")),
+            max_tokens=int(os.getenv("CYBERNH_LOCAL_DEEPSEEK_MAX_TOKENS", "5120")),
             timeout_seconds=int(os.getenv("CYBERNH_LOCAL_DEEPSEEK_TIMEOUT_SECONDS", "120")),
             json_mode=_env_bool("CYBERNH_LOCAL_DEEPSEEK_JSON_MODE", False),
             thinking=None,

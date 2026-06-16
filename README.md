@@ -157,6 +157,7 @@ config/local_deepseek_v4_flash.env.example
 
 - `BASE_URL`: `https://uni-api.cstcloud.cn/v1`
 - `model`: `deepseek-v4-flash`
+- `max_length`: `5120`
 - 文档链接: `https://uni-api.cstcloud.cn/doc/llm/`
 
 这一分支会：

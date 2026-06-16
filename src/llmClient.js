@@ -108,7 +108,7 @@ function loadLlmConfig(options = {}) {
       apiKey: normalizedRemoteApiKey(process.env.CYBERNH_LOCAL_DEEPSEEK_API_KEY),
       apiKeyEnv: "CYBERNH_LOCAL_DEEPSEEK_API_KEY",
       temperature: envNumber("CYBERNH_LOCAL_DEEPSEEK_TEMPERATURE", 0),
-      maxTokens: envNumber("CYBERNH_LOCAL_DEEPSEEK_MAX_TOKENS", 512),
+      maxTokens: envNumber("CYBERNH_LOCAL_DEEPSEEK_MAX_TOKENS", 5120),
       timeoutSeconds: envNumber("CYBERNH_LOCAL_DEEPSEEK_TIMEOUT_SECONDS", 120),
       jsonMode: envBoolean("CYBERNH_LOCAL_DEEPSEEK_JSON_MODE", false),
       thinking: envBoolean("CYBERNH_LOCAL_DEEPSEEK_THINKING", false),
@@ -141,40 +141,8 @@ async function decideWorkerWithLlm(observation, options = {}) {
   const requestPayload = buildRequestPayload(cfg, observation);
 
   try {
-    const first = await completeOnce(cfg, requestPayload);
-    if (!first.ok) return { ...first, config: publicConfig(cfg), requestPayload };
-
-    let content = first.content;
-    let completion = first.completion;
-    let decision;
-    try {
-      decision = parseDecisionContent(content, observation);
-    } catch (validationError) {
-      const retryPayload = buildRepairRequestPayload(cfg, observation, requestPayload, content, validationError.message);
-      const retry = await completeOnce(cfg, retryPayload);
-      if (!retry.ok) return { ...retry, config: publicConfig(cfg), requestPayload: retryPayload };
-      content = retry.content;
-      completion = retry.completion;
-      decision = parseDecisionContent(content, observation);
-      return {
-        ok: true,
-        config: publicConfig(cfg),
-        requestPayload: retryPayload,
-        rawReply: completion,
-        content,
-        decision,
-        repaired: true,
-        repairReason: validationError.message,
-      };
-    }
-    return {
-      ok: true,
-      config: publicConfig(cfg),
-      requestPayload,
-      rawReply: completion,
-      content,
-      decision,
-    };
+    const result = await executeDecisionRequest(cfg, observation, requestPayload);
+    return { ...result, config: publicConfig(cfg) };
   } catch (error) {
     return {
       ok: false,
@@ -184,6 +152,72 @@ async function decideWorkerWithLlm(observation, options = {}) {
       error: error.name === "AbortError" ? `LLM request timed out after ${cfg.timeoutSeconds}s` : error.message,
     };
   }
+}
+
+async function repairWorkerDecisionWithLlm(observation, options = {}) {
+  const cfg = loadLlmConfig(options);
+  const originalRequestPayload = options.originalRequestPayload || buildRequestPayload(cfg, observation);
+  const repairPayload = buildExecutionRepairRequestPayload(
+    cfg,
+    observation,
+    originalRequestPayload,
+    options.invalidDecision,
+    options.repairReason,
+    options.runtimeSupportedActions || []
+  );
+
+  try {
+    const result = await executeDecisionRequest(cfg, observation, repairPayload);
+    return {
+      ...result,
+      config: publicConfig(cfg),
+      repaired: true,
+      repairReason: options.repairReason || result.repairReason || "Rejected by simulator",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      config: publicConfig(cfg),
+      requestPayload: repairPayload,
+      rawReply: null,
+      error: error.name === "AbortError" ? `LLM request timed out after ${cfg.timeoutSeconds}s` : error.message,
+    };
+  }
+}
+
+async function executeDecisionRequest(cfg, observation, requestPayload) {
+  const first = await completeOnce(cfg, requestPayload);
+  if (!first.ok) return { ...first, requestPayload };
+
+  let content = first.content;
+  let completion = first.completion;
+  let decision;
+  try {
+    decision = parseDecisionContent(content, observation);
+  } catch (validationError) {
+    const retryPayload = buildRepairRequestPayload(cfg, observation, requestPayload, content, validationError.message);
+    const retry = await completeOnce(cfg, retryPayload);
+    if (!retry.ok) return { ...retry, requestPayload: retryPayload };
+    content = retry.content;
+    completion = retry.completion;
+    decision = parseDecisionContent(content, observation);
+    return {
+      ok: true,
+      requestPayload: retryPayload,
+      rawReply: completion,
+      content,
+      decision,
+      repaired: true,
+      repairReason: validationError.message,
+    };
+  }
+  return {
+    ok: true,
+    requestPayload,
+    rawReply: completion,
+    content,
+    decision,
+  };
 }
 
 async function completeOnce(cfg, requestPayload) {
@@ -320,6 +354,47 @@ function buildRepairRequestPayload(cfg, observation, originalPayload, invalidCon
     messages: [
       ...originalPayload.messages,
       { role: "assistant", content: invalidContent || "{}" },
+      {
+        role: "user",
+        content: stringifyUserContent(repairPayload, cfg),
+      },
+    ],
+  };
+}
+
+function buildExecutionRepairRequestPayload(
+  cfg,
+  observation,
+  originalPayload,
+  invalidDecision,
+  repairReason,
+  runtimeSupportedActions = []
+) {
+  const allowedTargetIds = (observation.candidateDemands || []).map((demand) => demand.demandId);
+  const compactInput = cfg.inputFormat !== "legacy";
+  const compactV2 = cfg.inputFormat === "compact_v2";
+  const invalidContent = invalidDecision ? JSON.stringify(invalidDecision) : "{}";
+  const repairPayload = {
+    instruction: compactV2 ? undefined : "Previous WorkerDecision was rejected by the simulator. Return one corrected WorkerDecision JSON object only.",
+    schema: compactV2 ? WORKER_DECISION_SCHEMA : undefined,
+    repair: compactV2 ? "runtime_rejected" : undefined,
+    aid: compactV2 ? observation.agentId : undefined,
+    validation_error: repairReason,
+    previous_action: invalidDecision?.action,
+    runtime_supported_actions: runtimeSupportedActions,
+    output_schema: compactV2 ? undefined : compactInput ? compactWorkerDecisionSchema(observation) : workerDecisionSchema(observation),
+  };
+  if (allowedTargetIds.length === 0) {
+    repairPayload.required_when_no_allowed_targets = { action: "reject_all", target_demand_id: null };
+  }
+  repairPayload[compactV2 ? "allowed_targets" : "allowed_target_demand_ids"] = compactV2
+    ? [...allowedTargetIds, null]
+    : allowedTargetIds;
+  return {
+    ...originalPayload,
+    messages: [
+      ...originalPayload.messages,
+      { role: "assistant", content: invalidContent },
       {
         role: "user",
         content: stringifyUserContent(repairPayload, cfg),
@@ -721,6 +796,7 @@ function publicConfig(cfg) {
 
 module.exports = {
   decideWorkerWithLlm,
+  repairWorkerDecisionWithLlm,
   loadLlmConfig,
   publicLlmConfig: publicConfig,
   DEEPSEEK_DECISION_MODE,

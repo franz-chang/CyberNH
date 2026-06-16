@@ -499,7 +499,6 @@ function eventMessage(message) {
 
 function bindControls() {
   $("runBtn").addEventListener("click", runSimulation);
-  $("headerRunBtn").addEventListener("click", runSimulation);
   $("pauseBtn").addEventListener("click", () => postJson("/api/pause"));
   $("stopBtn").addEventListener("click", () => postJson("/api/stop"));
   $("resetBtn").addEventListener("click", () => postJson("/api/reset", { config: exportSnapshot() }));
@@ -653,7 +652,6 @@ function updateHeader(snapshot) {
     time: snapshot.currentTime,
     load: enumLabel("load", load),
   });
-  $("headerRunBtn").textContent = snapshot.tick >= totalTicks ? t("actions.done") : t("actions.run");
 }
 
 function renderLegend() {

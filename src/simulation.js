@@ -18,11 +18,12 @@ const {
 } = require("./config");
 const { createMapState, computeRoute, roomLookup, sameCell, isPassable } = require("./map");
 const { SeededRng, clamp, percentile, gini } = require("./rng");
-const { decideWorkerWithLlm } = require("./llmClient");
+const { decideWorkerWithLlm, repairWorkerDecisionWithLlm } = require("./llmClient");
 
 const WAITING_STATUSES = new Set(["waiting", "timeout_escalated", "waiting_for_equipment"]);
 const ACTIVE_WAIT_STATUSES = new Set(["waiting", "timeout_escalated", "waiting_for_equipment", "assigned", "moving", "coordination_waiting"]);
 const ACTIVE_TASK_STATUSES = new Set(["assigned", "moving", "coordination_waiting", "in_service"]);
+const EXECUTABLE_WORKER_ACTIONS = ["accept_task", "join_two_person_task", "reject_all", "return_to_station", "continue_task", "finish"];
 const MEMORY_LIMIT = 20;
 
 class CyberNHSimulation {
@@ -564,12 +565,24 @@ class CyberNHSimulation {
     for (const worker of idleWorkers) {
       if (activeCount >= this.config.maxActiveTask) break;
       const useWorkerLlm = this.config.agentDecisionMode !== "rule_only" && this.config.workerAgentLlmEnabled;
-      const decision = useWorkerLlm ? await this.requiredLlmDecision(worker) : this.ruleDecisionForWorker(worker);
-      if (decision.action === "reject_all") continue;
-      const result = this.applyWorkerDecision(decision);
+      let llmResult = null;
+      let decision = useWorkerLlm ? (llmResult = await this.requiredLlmDecision(worker)).decision : this.ruleDecisionForWorker(worker);
+      let result = decision.action === "reject_all" ? { ok: true } : this.applyWorkerDecision(decision);
+
       if (!result.ok && useWorkerLlm) {
-        throw new Error(`LLM decision application failed for ${worker.id}: ${result.error || "unknown error"}`);
+        llmResult = await this.retryRejectedWorkerDecision(worker, llmResult, result.error || "unknown error");
+        decision = llmResult.decision;
+        result = decision.action === "reject_all" ? { ok: true } : this.applyWorkerDecision(decision);
+        if (!result.ok) {
+          throw new Error(`LLM decision application failed for ${worker.id}: ${result.error || "unknown error"}`);
+        }
       }
+
+      if (useWorkerLlm && llmResult) {
+        this.recordAcceptedLlmDecision(worker.id, llmResult);
+      }
+
+      if (decision.action === "reject_all") continue;
       if (result.ok) activeCount = this.countActiveTasks();
     }
   }
@@ -660,10 +673,98 @@ class CyberNHSimulation {
       throw new Error(`${eventPayload.llmError} for ${worker.id}`);
     }
 
-    eventPayload.decision = llmResult.decision;
+    return { ...llmResult, observation };
+  }
+
+  async retryRejectedWorkerDecision(worker, llmResult, rejectionReason) {
+    const observation = llmResult.observation || this.getWorkerObservation(worker.id);
+    this.logEvent("agent.decision_retry", "warning", `${worker.id}: retrying after simulator rejection`, {
+      agent_id: worker.id,
+      previousDecision: llmResult.decision,
+      rejectionReason,
+    });
+
+    const retry = await repairWorkerDecisionWithLlm(observation, {
+      decisionMode: this.config.agentDecisionMode,
+      originalRequestPayload: llmResult.requestPayload,
+      invalidDecision: llmResult.decision,
+      repairReason: `Previous decision was rejected by the simulator: ${rejectionReason}`,
+      runtimeSupportedActions: EXECUTABLE_WORKER_ACTIONS,
+    });
+
+    const eventPayload = {
+      agent_id: worker.id,
+      mode: this.config.agentDecisionMode,
+      decision: retry.ok ? retry.decision : null,
+      llmInput: retry.requestPayload,
+      llmReply: retry.ok ? retry.decision : null,
+      rawReply: retry.rawReply,
+      llmConfig: retry.config,
+      llmError: retry.ok ? null : retry.error,
+      source: retry.ok ? retry.config.provider : "LLM_RETRY_ERROR",
+      repaired: true,
+      repairReason: rejectionReason,
+    };
+
+    if (!retry.ok) {
+      this.pushQueue2Item({
+        type: "agent.decision",
+        agentId: worker.id,
+        llmInput: retry.requestPayload,
+        llmReply: null,
+        rawReply: retry.rawReply,
+        decision: null,
+        source: "LLM_RETRY_ERROR",
+        llmError: retry.error,
+        reason: `LLM retry failed: ${retry.error}`,
+        tick: this.state.tick,
+      });
+      this.logEvent("agent.decision", "error", `${worker.id}: LLM retry failed: ${retry.error}`, eventPayload);
+      throw new Error(`LLM retry failed for ${worker.id}: ${retry.error}`);
+    }
+
+    try {
+      this.validateWorkerDecision(retry.decision);
+    } catch (error) {
+      eventPayload.llmError = `LLM retry rejected by simulator: ${error.message}`;
+      eventPayload.source = "LLM_RETRY_REJECTED";
+      this.pushQueue2Item({
+        type: "agent.decision",
+        agentId: worker.id,
+        llmInput: retry.requestPayload,
+        llmReply: retry.decision,
+        rawReply: retry.rawReply,
+        decision: null,
+        source: "LLM_RETRY_REJECTED",
+        llmError: eventPayload.llmError,
+        reason: eventPayload.llmError,
+        tick: this.state.tick,
+      });
+      this.logEvent("agent.decision", "error", `${worker.id}: ${eventPayload.llmError}`, eventPayload);
+      throw new Error(`${eventPayload.llmError} for ${worker.id}`);
+    }
+
+    return { ...retry, observation };
+  }
+
+  recordAcceptedLlmDecision(workerId, llmResult) {
+    const eventPayload = {
+      agent_id: workerId,
+      mode: this.config.agentDecisionMode,
+      decision: llmResult.decision,
+      llmInput: llmResult.requestPayload,
+      llmReply: llmResult.decision,
+      rawReply: llmResult.rawReply,
+      llmConfig: llmResult.config,
+      llmError: null,
+      source: llmResult.config.provider,
+      repaired: Boolean(llmResult.repaired),
+      repairReason: llmResult.repairReason || null,
+    };
+
     this.pushQueue2Item({
       type: "agent.decision",
-      agentId: worker.id,
+      agentId: workerId,
       llmInput: llmResult.requestPayload,
       llmReply: llmResult.decision,
       rawReply: llmResult.rawReply,
@@ -673,8 +774,7 @@ class CyberNHSimulation {
       reason: llmResult.decision.reason,
       tick: this.state.tick,
     });
-    this.logEvent("agent.decision", "info", `${worker.id}: ${llmResult.decision.reason}`, eventPayload);
-    return llmResult.decision;
+    this.logEvent("agent.decision", "info", `${workerId}: ${llmResult.decision.reason}`, eventPayload);
   }
 
   candidateDemandsForWorker(worker) {
