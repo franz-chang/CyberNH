@@ -566,20 +566,46 @@ class CyberNHSimulation {
       if (activeCount >= this.config.maxActiveTask) break;
       const useWorkerLlm = this.config.agentDecisionMode !== "rule_only" && this.config.workerAgentLlmEnabled;
       let llmResult = null;
-      let decision = useWorkerLlm ? (llmResult = await this.requiredLlmDecision(worker)).decision : this.ruleDecisionForWorker(worker);
+      let decision;
+      if (useWorkerLlm) {
+        llmResult = await this.requiredLlmDecision(worker);
+        if (!llmResult.ok) {
+          llmResult = this.buildRuleFallbackDecision(worker, llmResult, llmResult.error || "LLM request failed", "request_failed");
+        }
+        decision = llmResult.decision;
+      } else {
+        decision = this.ruleDecisionForWorker(worker);
+      }
       let result = decision.action === "reject_all" ? { ok: true } : this.applyWorkerDecision(decision);
 
-      if (!result.ok && useWorkerLlm) {
-        llmResult = await this.retryRejectedWorkerDecision(worker, llmResult, result.error || "unknown error");
-        decision = llmResult.decision;
-        result = decision.action === "reject_all" ? { ok: true } : this.applyWorkerDecision(decision);
-        if (!result.ok) {
-          throw new Error(`LLM decision application failed for ${worker.id}: ${result.error || "unknown error"}`);
+      if (!result.ok && useWorkerLlm && llmResult && !llmResult.fallback) {
+        try {
+          llmResult = await this.retryRejectedWorkerDecision(worker, llmResult, result.error || "unknown error");
+          decision = llmResult.decision;
+          result = decision.action === "reject_all" ? { ok: true } : this.applyWorkerDecision(decision);
+        } catch (error) {
+          llmResult = this.buildRuleFallbackDecision(worker, llmResult, error.message, "repair_failed");
+          decision = llmResult.decision;
+          result = decision.action === "reject_all" ? { ok: true } : this.applyWorkerDecision(decision);
         }
       }
 
+      if (!result.ok && useWorkerLlm && llmResult && !llmResult.fallback) {
+        llmResult = this.buildRuleFallbackDecision(worker, llmResult, result.error || "unknown error", "application_failed");
+        decision = llmResult.decision;
+        result = decision.action === "reject_all" ? { ok: true } : this.applyWorkerDecision(decision);
+      }
+
+      if (!result.ok) {
+        throw new Error(`Worker decision application failed for ${worker.id}: ${result.error || "unknown error"}`);
+      }
+
       if (useWorkerLlm && llmResult) {
-        this.recordAcceptedLlmDecision(worker.id, llmResult);
+        if (llmResult.fallback) {
+          this.recordRuleFallbackDecision(worker.id, llmResult);
+        } else {
+          this.recordAcceptedLlmDecision(worker.id, llmResult);
+        }
       }
 
       if (decision.action === "reject_all") continue;
@@ -623,56 +649,6 @@ class CyberNHSimulation {
   async requiredLlmDecision(worker) {
     const observation = this.getWorkerObservation(worker.id);
     const llmResult = await decideWorkerWithLlm(observation, { decisionMode: this.config.agentDecisionMode });
-    const eventPayload = {
-      agent_id: worker.id,
-      mode: this.config.agentDecisionMode,
-      decision: null,
-      llmInput: llmResult.requestPayload,
-      llmReply: llmResult.ok ? llmResult.decision : null,
-      rawReply: llmResult.rawReply,
-      llmConfig: llmResult.config,
-      llmError: llmResult.ok ? null : llmResult.error,
-      source: llmResult.ok ? llmResult.config.provider : "LLM_ERROR",
-    };
-
-    if (!llmResult.ok) {
-      this.pushQueue2Item({
-        type: "agent.decision",
-        agentId: worker.id,
-        llmInput: llmResult.requestPayload,
-        llmReply: null,
-        rawReply: llmResult.rawReply,
-        decision: null,
-        source: "LLM_ERROR",
-        llmError: llmResult.error,
-        reason: `LLM decision failed: ${llmResult.error}`,
-        tick: this.state.tick,
-      });
-      this.logEvent("agent.decision", "error", `${worker.id}: LLM decision failed: ${llmResult.error}`, eventPayload);
-      throw new Error(`LLM decision failed for ${worker.id}: ${llmResult.error}`);
-    }
-
-    try {
-      this.validateWorkerDecision(llmResult.decision);
-    } catch (error) {
-      eventPayload.llmError = `LLM decision rejected by simulator: ${error.message}`;
-      eventPayload.source = "LLM_REJECTED";
-      this.pushQueue2Item({
-        type: "agent.decision",
-        agentId: worker.id,
-        llmInput: llmResult.requestPayload,
-        llmReply: llmResult.decision,
-        rawReply: llmResult.rawReply,
-        decision: null,
-        source: "LLM_REJECTED",
-        llmError: eventPayload.llmError,
-        reason: eventPayload.llmError,
-        tick: this.state.tick,
-      });
-      this.logEvent("agent.decision", "error", `${worker.id}: ${eventPayload.llmError}`, eventPayload);
-      throw new Error(`${eventPayload.llmError} for ${worker.id}`);
-    }
-
     return { ...llmResult, observation };
   }
 
@@ -758,6 +734,8 @@ class CyberNHSimulation {
       llmConfig: llmResult.config,
       llmError: null,
       source: llmResult.config.provider,
+      transportRepaired: Boolean(llmResult.transportRepaired),
+      transportRepairReason: llmResult.transportRepairReason || null,
       repaired: Boolean(llmResult.repaired),
       repairReason: llmResult.repairReason || null,
     };
@@ -775,6 +753,57 @@ class CyberNHSimulation {
       tick: this.state.tick,
     });
     this.logEvent("agent.decision", "info", `${workerId}: ${llmResult.decision.reason}`, eventPayload);
+  }
+
+  buildRuleFallbackDecision(worker, llmResult, fallbackReason, fallbackStage = "request_failed") {
+    return {
+      ...(llmResult || {}),
+      ok: true,
+      fallback: true,
+      fallbackStage,
+      fallbackReason,
+      llmError: llmResult?.error || fallbackReason,
+      decision: this.ruleDecisionForWorker(worker),
+      observation: llmResult?.observation || this.getWorkerObservation(worker.id),
+    };
+  }
+
+  recordRuleFallbackDecision(workerId, llmResult) {
+    const llmError = llmResult.llmError || llmResult.error || llmResult.fallbackReason || "LLM unavailable";
+    const stage = llmResult.fallbackStage || "request_failed";
+    const eventPayload = {
+      agent_id: workerId,
+      mode: this.config.agentDecisionMode,
+      decision: llmResult.decision,
+      llmInput: llmResult.requestPayload,
+      llmReply: null,
+      rawReply: llmResult.rawReply,
+      llmConfig: llmResult.config || null,
+      llmError,
+      source: "RULE_FALLBACK",
+      fallback: true,
+      fallbackStage: stage,
+      fallbackReason: llmResult.fallbackReason || null,
+    };
+
+    this.pushQueue2Item({
+      type: "agent.decision",
+      agentId: workerId,
+      llmInput: llmResult.requestPayload,
+      llmReply: null,
+      rawReply: llmResult.rawReply,
+      decision: llmResult.decision,
+      source: "RULE_FALLBACK",
+      llmError,
+      reason: `Rule fallback applied: ${llmResult.decision.reason}`,
+      tick: this.state.tick,
+    });
+    this.logEvent(
+      "agent.decision",
+      "warning",
+      `${workerId}: LLM unavailable, used rule fallback (${String(llmError).slice(0, 120)})`,
+      eventPayload
+    );
   }
 
   candidateDemandsForWorker(worker) {

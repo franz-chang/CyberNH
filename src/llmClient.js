@@ -187,36 +187,42 @@ async function repairWorkerDecisionWithLlm(observation, options = {}) {
 
 async function executeDecisionRequest(cfg, observation, requestPayload) {
   const first = await completeOnce(cfg, requestPayload);
-  if (!first.ok) return { ...first, requestPayload };
+  if (!first.ok) return { ...first, requestPayload: first.requestPayload || requestPayload };
 
   let content = first.content;
   let completion = first.completion;
+  let effectiveRequestPayload = first.requestPayload || requestPayload;
   let decision;
   try {
     decision = parseDecisionContent(content, observation);
   } catch (validationError) {
-    const retryPayload = buildRepairRequestPayload(cfg, observation, requestPayload, content, validationError.message);
+    const retryPayload = buildRepairRequestPayload(cfg, observation, effectiveRequestPayload, content, validationError.message);
     const retry = await completeOnce(cfg, retryPayload);
-    if (!retry.ok) return { ...retry, requestPayload: retryPayload };
+    if (!retry.ok) return { ...retry, requestPayload: retry.requestPayload || retryPayload };
     content = retry.content;
     completion = retry.completion;
+    effectiveRequestPayload = retry.requestPayload || retryPayload;
     decision = parseDecisionContent(content, observation);
     return {
       ok: true,
-      requestPayload: retryPayload,
+      requestPayload: effectiveRequestPayload,
       rawReply: completion,
       content,
       decision,
       repaired: true,
       repairReason: validationError.message,
+      transportRepaired: Boolean(first.transportRepaired || retry.transportRepaired),
+      transportRepairReason: retry.transportRepairReason || first.transportRepairReason || null,
     };
   }
   return {
     ok: true,
-    requestPayload,
+    requestPayload: effectiveRequestPayload,
     rawReply: completion,
     content,
     decision,
+    transportRepaired: Boolean(first.transportRepaired),
+    transportRepairReason: first.transportRepairReason || null,
   };
 }
 
@@ -235,6 +241,44 @@ async function completeOnce(cfg, requestPayload) {
     };
   }
 
+  let first = await sendCompletionRequest(cfg, requestPayload);
+  if (first.ok) return { ...first, requestPayload };
+
+  if (shouldRetrySamePayload(first)) {
+    await delay(180);
+    const retry = await sendCompletionRequest(cfg, requestPayload);
+    if (retry.ok) {
+      return {
+        ...retry,
+        requestPayload,
+        transportRepaired: true,
+        transportRepairReason: "Transient LLM request retry succeeded",
+      };
+    }
+    first = retry;
+  }
+
+  if (first.status === 422) {
+    for (const fallback of build422FallbackPayloads(cfg, requestPayload)) {
+      await delay(120);
+      const retry = await sendCompletionRequest(cfg, fallback.payload);
+      if (retry.ok) {
+        return {
+          ...retry,
+          requestPayload: fallback.payload,
+          transportRepaired: true,
+          transportRepairReason: fallback.reason,
+        };
+      }
+      first = retry;
+      if (retry.status !== 422) break;
+    }
+  }
+
+  return { ...first, requestPayload };
+}
+
+async function sendCompletionRequest(cfg, requestPayload) {
   const endpoint = `${cfg.baseUrl.replace(/\/+$/, "")}/chat/completions`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Math.max(1, cfg.timeoutSeconds) * 1000);
@@ -253,8 +297,9 @@ async function completeOnce(cfg, requestPayload) {
     if (!response.ok) {
       return {
         ok: false,
+        status: response.status,
         rawReply: responseText,
-        error: describeHttpError(cfg, response.status),
+        error: describeHttpError(cfg, response.status, responseText),
       };
     }
 
@@ -267,15 +312,19 @@ async function completeOnce(cfg, requestPayload) {
   } catch (error) {
     return {
       ok: false,
+      status: null,
       rawReply: null,
       error: describeRequestError(cfg, error),
+      retryable: isRetryableRequestError(error),
     };
   } finally {
     clearTimeout(timeout);
   }
 }
 
-function describeHttpError(cfg, status) {
+function describeHttpError(cfg, status, responseText = "") {
+  const detail = extractErrorDetail(responseText);
+  const suffix = detail ? `: ${detail}` : "";
   if (cfg.provider === "deepseek" && status === 401) {
     return "DeepSeek API returned 401 Unauthorized; check CYBERNH_DEEPSEEK_API_KEY";
   }
@@ -285,7 +334,10 @@ function describeHttpError(cfg, status) {
   if (cfg.provider !== "deepseek" && status === 401) {
     return "Local Qwen endpoint returned 401; check CYBERNH_LLM_API_KEY matches the running LLM server";
   }
-  return `LLM endpoint returned ${status}`;
+  if (status === 422) {
+    return `LLM endpoint returned 422${suffix || ": request payload was rejected by the model server"}`;
+  }
+  return `LLM endpoint returned ${status}${suffix}`;
 }
 
 function describeRequestError(cfg, error) {
@@ -301,6 +353,95 @@ function describeRequestError(cfg, error) {
     return `CSTCloud DeepSeek-V4-Flash endpoint is not reachable at ${cfg.baseUrl}`;
   }
   return error.message;
+}
+
+function isRetryableRequestError(error) {
+  if (error?.name === "AbortError") return true;
+  const code = error?.cause?.code || error?.code || "";
+  return ["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EPIPE"].includes(code) || error?.message === "fetch failed";
+}
+
+function shouldRetrySamePayload(result) {
+  if (!result || result.ok) return false;
+  if (result.retryable) return true;
+  return [429, 500, 502, 503, 504].includes(result.status);
+}
+
+function build422FallbackPayloads(cfg, requestPayload) {
+  const variants = [];
+  const tokenKey = cfg.requestMaxTokensKey || "max_tokens";
+  const currentMaxTokens = Number(requestPayload[tokenKey]);
+  const reducedMaxTokens = Number.isFinite(currentMaxTokens) ? Math.max(256, Math.min(currentMaxTokens, 1024)) : 1024;
+
+  if (requestPayload.response_format) {
+    const payload = { ...requestPayload };
+    delete payload.response_format;
+    variants.push({
+      reason: "422 compatibility retry without response_format",
+      payload,
+    });
+  }
+
+  const payload = { ...requestPayload };
+  delete payload.response_format;
+  delete payload.thinking;
+  delete payload.chat_template_kwargs;
+  if (!Number.isFinite(currentMaxTokens) || reducedMaxTokens !== currentMaxTokens) {
+    payload[tokenKey] = reducedMaxTokens;
+  }
+  variants.push({
+    reason: "422 compatibility retry with simplified request payload",
+    payload,
+  });
+
+  const seen = new Set();
+  return variants.filter((item) => {
+    const key = JSON.stringify(item.payload);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function extractErrorDetail(responseText) {
+  const text = String(responseText || "").trim();
+  if (!text) return "";
+  try {
+    return normalizeErrorDetail(JSON.parse(text));
+  } catch {
+    return squashWhitespace(text).slice(0, 240);
+  }
+}
+
+function normalizeErrorDetail(payload) {
+  if (payload == null) return "";
+  if (typeof payload === "string") return squashWhitespace(payload).slice(0, 240);
+  if (Array.isArray(payload)) {
+    return payload
+      .map(normalizeErrorDetail)
+      .filter(Boolean)
+      .join("; ")
+      .slice(0, 240);
+  }
+  if (typeof payload === "object") {
+    if (payload.detail !== undefined) return normalizeErrorDetail(payload.detail);
+    if (payload.error !== undefined) return normalizeErrorDetail(payload.error);
+    if (payload.message !== undefined) return normalizeErrorDetail(payload.message);
+    if (payload.msg !== undefined && payload.loc !== undefined) {
+      const loc = Array.isArray(payload.loc) ? payload.loc.join(".") : String(payload.loc);
+      return squashWhitespace(`${loc}: ${payload.msg}`).slice(0, 240);
+    }
+    if (payload.msg !== undefined) return normalizeErrorDetail(payload.msg);
+  }
+  return squashWhitespace(JSON.stringify(payload)).slice(0, 240);
+}
+
+function squashWhitespace(text) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildRequestPayload(cfg, observation) {
