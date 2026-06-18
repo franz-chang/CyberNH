@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Agent 打猎系统出肉量模拟</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero-band">
+        <p class="eyebrow">独立模型页面</p>
+        <h1>Agent 打猎系统出肉量模拟</h1>
+        <p class="hero-copy">
+          按 PDF 中的战力、胜率和平分规则，展示随着 Agent 数量增加，单个 Agent 与团队整体出肉量如何变化。
+        </p>
+        <div class="formula-strip">
+          <div class="formula-pill">C_team = N x C_h</div>
+          <div class="formula-pill">P_success = (N x C_h) / (N x C_h + C_p)</div>
+          <div class="formula-pill">E[M] = P_success x (M_total / N)</div>
+        </div>
+      </header>
+
+      <main>
+        <section class="control-band">
+          <div class="section-head">
+            <h2>参数与模拟</h2>
+            <p>默认值直接对应 PDF 示例：单个 Agent 战斗力 <code>C_h = 10</code>，猎物刷新概率为 60% / 30% / 10%。</p>
+          </div>
+          <div class="controls-grid">
+            <label class="control">
+              <span>单个 Agent 战斗力 C_h</span>
+              <input id="hunterPower" type="number" min="1" max="100" step="1" value="10">
+            </label>
+            <label class="control">
+              <span>最大 Agent 数 N</span>
+              <input id="maxAgents" type="number" min="2" max="100" step="1" value="30">
+            </label>
+            <label class="control">
+              <span>每个点的模拟次数</span>
+              <input id="trials" type="number" min="100" max="50000" step="100" value="5000">
+            </label>
+            <label class="control">
+              <span>随机种子</span>
+              <input id="seed" type="number" min="1" max="999999999" step="1" value="20260617">
+            </label>
+          </div>
+          <div class="action-row">
+            <button id="rerunButton" class="primary-button" type="button">重新模拟</button>
+            <button id="exportButton" class="secondary-button" type="button">导出 CSV</button>
+            <p id="statusText" class="status-text">使用固定种子生成模拟曲线，便于复现与比较。</p>
+          </div>
+        </section>
+
+        <section class="table-band">
+          <div class="section-head">
+            <h2>猎物配置</h2>
+            <p>表格参数直接来自《Agent 打猎系统》PDF。</p>
+          </div>
+          <div class="table-wrap">
+            <table class="prey-table">
+              <thead>
+                <tr>
+                  <th>猎物等级</th>
+                  <th>刷新概率</th>
+                  <th>战斗力 C_p</th>
+                  <th>总出肉量 M_total</th>
+                  <th>风险特征</th>
+                </tr>
+              </thead>
+              <tbody id="preyTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="summary-band">
+          <div class="section-head">
+            <h2>关键结论</h2>
+            <p>卡片会随输入参数和模拟结果实时更新。</p>
+          </div>
+          <div id="summaryGrid" class="summary-grid"></div>
+        </section>
+
+        <section class="chart-band">
+          <div class="section-head">
+            <h2>折线图</h2>
+            <p>实线是理论值，虚线是蒙特卡洛模拟均值。点击图例可以隐藏或显示某条曲线。</p>
+          </div>
+
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div>
+                <h3>单个 Agent 期望出肉量</h3>
+                <p>对应 PDF 中的期望值 E[M]。</p>
+              </div>
+            </div>
+            <div id="perAgentChart" class="chart-mount"></div>
+          </article>
+
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div>
+                <h3>团队总期望出肉量</h3>
+                <p>团队视角下，成功后拿到整只猎物的数学期望。</p>
+              </div>
+            </div>
+            <div id="teamChart" class="chart-mount"></div>
+          </article>
+
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div>
+                <h3>总体环境下的群体收益 vs 个体收益</h3>
+                <p>把两种收益放在同一张图里，左轴看个体收益，右轴看群体收益。</p>
+              </div>
+            </div>
+            <div id="combinedChart" class="chart-mount"></div>
+          </article>
+
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div>
+                <h3>捕猎成功率</h3>
+                <p>用来观察 Agent 数量增加时风险如何被平滑。</p>
+              </div>
+            </div>
+            <div id="successChart" class="chart-mount"></div>
+          </article>
+        </section>
+
+        <section class="details-band">
+          <div class="section-head">
+            <h2>总体环境抽样值</h2>
+            <p>下面的表只展示混合环境下的总体结果，便于快速查看若干关键 Agent 数量。</p>
+          </div>
+          <div class="table-wrap">
+            <table class="details-table">
+              <thead>
+                <tr>
+                  <th>Agent 数 N</th>
+                  <th>总体单人理论</th>
+                  <th>总体单人模拟</th>
+                  <th>总体团队理论</th>
+                  <th>总体团队模拟</th>
+                  <th>总体胜率理论</th>
+                  <th>总体胜率模拟</th>
+                </tr>
+              </thead>
+              <tbody id="detailsTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
