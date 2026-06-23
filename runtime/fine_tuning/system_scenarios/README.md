@@ -1,6 +1,6 @@
 # CyberNH System Scenario Fine-Tuning
 
-This directory prepares a small SFT/LoRA dataset that teaches the local Qwen3-VL runtime to treat compact system tags as replacements for the long CyberNH system prompts.
+This directory prepares a small SFT/LoRA dataset that teaches the local Qwen3-8B runtime to treat compact system tags as replacements for the long CyberNH system prompts.
 
 For the full training design and operating procedure, see `TRAINING_METHOD.md`.
 
@@ -101,7 +101,7 @@ runtime/fine_tuning/system_scenarios/run_lora_finetune.sh --dry-run
 Default standalone scenario-adapter output:
 
 ```text
-/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
+/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora-qwen3-8b
 ```
 
 Run a short local fine-tune:
@@ -137,14 +137,14 @@ eval_loss=1.7205
 behavior_eval=6/6 passed
 ```
 
-Behavior evaluation is stricter than token loss: it checks whether the model follows each scenario tag in a runtime-shaped request and returns the expected structured action. The standalone scenario adapter is mainly useful for ablation or incremental training. In the current project workflow, its behavior has been carried forward into the default `rules-lora` adapter together with the rules dataset.
+Behavior evaluation is stricter than token loss: it checks whether the model follows each scenario tag in a runtime-shaped request and returns the expected structured action. The standalone scenario adapter is mainly useful for ablation or incremental training. In the current project workflow, its behavior should be carried forward into the default `rules-lora-qwen3-8b` adapter together with the rules dataset.
 
 ## Use Adapter
 
 If you want to serve the standalone scenario adapter directly, set:
 
 ```bash
-CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
+CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora-qwen3-8b
 ```
 
 Then restart the local LLM:
@@ -173,7 +173,7 @@ Then run:
 The evaluator first checks `/v1/health`. A loaded adapter should report:
 
 ```text
-adapter_check=PASS expected_adapter=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora
+adapter_check=PASS expected_adapter=/Users/chongzhang/CyberNH-LLM/adapters/system-scenarios-lora-qwen3-8b
 ```
 
 Latest behavior result:

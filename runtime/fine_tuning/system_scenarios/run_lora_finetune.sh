@@ -5,9 +5,33 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCENARIO_DIR="$ROOT_DIR/runtime/fine_tuning/system_scenarios"
 DEFAULT_LLM_DIR="$(cd "$ROOT_DIR/.." && pwd)/$(basename "$ROOT_DIR")-LLM"
 LLM_DIR="${CYBERNH_LLM_DIR:-$DEFAULT_LLM_DIR}"
+
+load_env_defaults() {
+  local env_file="$1"
+  local line key value
+  [[ -f "$env_file" ]] || return 0
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" == export\ * ]] && line="${line#export }"
+    key="${line%%=*}"
+    value="${line#*=}"
+    [[ "$key" == "$line" ]] && continue
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    if [[ ( "$value" == \"*\" && "$value" == *\" ) || ( "$value" == \'*\' && "$value" == *\' ) ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+    if [[ -z "${!key+x}" ]]; then
+      export "$key=$value"
+    fi
+  done < "$env_file"
+}
+
+load_env_defaults "$LLM_DIR/.env"
+
 PYTHON_BIN="${CYBERNH_LLM_PYTHON:-$LLM_DIR/.venv/bin/python}"
-MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-VL-2B-Instruct}"
-OUTPUT_DIR="${CYBERNH_SCENARIO_ADAPTER_DIR:-$LLM_DIR/adapters/system-scenarios-lora}"
+MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-8B-Instruct}"
+OUTPUT_DIR="${CYBERNH_SCENARIO_ADAPTER_DIR:-$LLM_DIR/adapters/system-scenarios-lora-qwen3-8b}"
 INSTALL_DEPS="${CYBERNH_FINETUNE_INSTALL_DEPS:-1}"
 BASE_TRAIN_FILE="$SCENARIO_DIR/data/train.jsonl"
 RUNTIME_TRAIN_FILE="$SCENARIO_DIR/data/train_runtime.jsonl"

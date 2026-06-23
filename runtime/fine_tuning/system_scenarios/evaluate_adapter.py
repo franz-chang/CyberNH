@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate whether CyberNH system-scenario LoRA is loaded and useful.")
     parser.add_argument("--base-url", default=os.getenv("CYBERNH_LLM_BASE_URL", "http://127.0.0.1:8000/v1"))
     parser.add_argument("--api-key", default=os.getenv("CYBERNH_LLM_API_KEY", "EMPTY"))
-    parser.add_argument("--model", default=os.getenv("CYBERNH_LLM_MODEL", "qwen3-vl-2b-instruct"))
+    parser.add_argument("--model", default=os.getenv("CYBERNH_LLM_MODEL", "qwen3-8b-instruct"))
     parser.add_argument("--eval-file", default=str(root / "data" / "eval.jsonl"))
     parser.add_argument("--expected-adapter", default=default_expected_adapter(root))
     parser.add_argument("--timeout", type=float, default=120.0)

@@ -121,7 +121,7 @@ function loadLlmConfig(options = {}) {
   return {
     provider: process.env.CYBERNH_LLM_PROVIDER || "modelscope-transformers",
     providerLabel: "Local Qwen",
-    model: process.env.CYBERNH_LLM_MODEL || "qwen3-vl-2b-instruct",
+    model: process.env.CYBERNH_LLM_MODEL || "qwen3-8b-instruct",
     baseUrl: process.env.CYBERNH_LLM_BASE_URL || "http://localhost:8000/v1",
     apiKey: process.env.CYBERNH_LLM_API_KEY || "EMPTY",
     apiKeyEnv: "CYBERNH_LLM_API_KEY",

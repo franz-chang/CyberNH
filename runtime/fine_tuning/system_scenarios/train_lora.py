@@ -15,7 +15,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import torch
 from torch.utils.data import DataLoader, Dataset
-from transformers import AutoProcessor
+from transformers import AutoProcessor, AutoTokenizer
 
 
 @dataclass
@@ -42,17 +42,18 @@ class TrainConfig:
 
 
 class ScenarioDataset(Dataset):
-    def __init__(self, records: list[dict[str, Any]], processor: Any, max_length: int):
+    def __init__(self, records: list[dict[str, Any]], processor: Any, max_length: int, multimodal_messages: bool):
         self.records = records
         self.processor = processor
         self.tokenizer = getattr(processor, "tokenizer", processor)
         self.max_length = max_length
+        self.multimodal_messages = multimodal_messages
 
     def __len__(self) -> int:
         return len(self.records)
 
     def __getitem__(self, index: int) -> dict[str, list[int]]:
-        messages = normalize_messages(self.records[index]["messages"])
+        messages = normalize_messages(self.records[index]["messages"], self.multimodal_messages)
         prompt_messages = messages[:-1]
 
         prompt_text = self.processor.apply_chat_template(
@@ -80,22 +81,38 @@ class ScenarioDataset(Dataset):
         return {"input_ids": full_ids, "labels": labels}
 
 
-def normalize_messages(messages: list[dict[str, str]]) -> list[dict[str, Any]]:
-    return [
-        {"role": message["role"], "content": [{"type": "text", "text": message["content"]}]}
-        for message in messages
-    ]
+def normalize_messages(messages: list[dict[str, str]], multimodal: bool) -> list[dict[str, Any]]:
+    if multimodal:
+        return [
+            {"role": message["role"], "content": [{"type": "text", "text": message["content"]}]}
+            for message in messages
+        ]
+    return [{"role": message["role"], "content": message["content"]} for message in messages]
+
+
+def model_config(model_dir: str) -> dict[str, Any]:
+    config_path = Path(model_dir) / "config.json"
+    if not config_path.exists():
+        return {}
+    return json.loads(config_path.read_text(encoding="utf-8"))
+
+
+def is_multimodal_model(model_dir: str) -> bool:
+    config = model_config(model_dir)
+    model_type = str(config.get("model_type", "")).lower()
+    architectures = " ".join(str(item).lower() for item in config.get("architectures", []))
+    return "vl" in model_type or "vision" in model_type or "vl" in architectures or "vision" in architectures
 
 
 def parse_args() -> argparse.Namespace:
     root = Path(__file__).resolve().parent
     default_llm_dir = Path(os.getenv("CYBERNH_LLM_DIR", "/Users/chongzhang/CyberNH-LLM"))
-    parser = argparse.ArgumentParser(description="LoRA fine-tune Qwen3-VL for CyberNH system scenario tags.")
-    parser.add_argument("--model-dir", default=os.getenv("CYBERNH_LLM_LOCAL_DIR", str(default_llm_dir / "models" / "Qwen3-VL-2B-Instruct")))
+    parser = argparse.ArgumentParser(description="LoRA fine-tune Qwen3/Qwen3-VL for CyberNH system scenario tags.")
+    parser.add_argument("--model-dir", default=os.getenv("CYBERNH_LLM_LOCAL_DIR", str(default_llm_dir / "models" / "Qwen3-8B-Instruct")))
     parser.add_argument("--base-adapter-dir", default=None, help="Optional existing LoRA adapter to continue training.")
     parser.add_argument("--train-file", default=str(root / "data" / "train_augmented_runtime.jsonl"))
     parser.add_argument("--eval-file", default=str(root / "data" / "eval.jsonl"))
-    parser.add_argument("--output-dir", default=str(default_llm_dir / "adapters" / "system-scenarios-lora"))
+    parser.add_argument("--output-dir", default=str(default_llm_dir / "adapters" / "system-scenarios-lora-qwen3-8b"))
     parser.add_argument("--max-steps", type=int, default=160)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=1)
@@ -147,10 +164,10 @@ def choose_device(name: str) -> torch.device:
     requested = name.lower()
     if requested != "auto":
         return torch.device(requested)
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
     if torch.cuda.is_available():
         return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
     return torch.device("cpu")
 
 
@@ -163,7 +180,7 @@ def choose_dtype(name: str, device: torch.device) -> torch.dtype:
     if requested in ("bfloat16", "bf16"):
         return torch.bfloat16
     if device.type == "cuda":
-        return torch.bfloat16
+        return torch.float16
     if device.type == "mps":
         return torch.float16
     return torch.float32
@@ -177,20 +194,32 @@ def seed_everything(seed: int) -> None:
 
 
 def load_model(model_dir: str, dtype: torch.dtype):
-    try:
-        from transformers import Qwen3VLForConditionalGeneration
+    if is_multimodal_model(model_dir):
+        try:
+            from transformers import Qwen3VLForConditionalGeneration
 
-        model_cls = Qwen3VLForConditionalGeneration
-    except ImportError:
-        from transformers import AutoModelForImageTextToText
+            model_cls = Qwen3VLForConditionalGeneration
+        except ImportError:
+            from transformers import AutoModelForImageTextToText
 
-        model_cls = AutoModelForImageTextToText
+            model_cls = AutoModelForImageTextToText
+    else:
+        from transformers import AutoModelForCausalLM
+
+        model_cls = AutoModelForCausalLM
     return model_cls.from_pretrained(
         model_dir,
         dtype=dtype,
         low_cpu_mem_usage=True,
         trust_remote_code=True,
     )
+
+
+def load_chat_processor(model_dir: str) -> tuple[Any, bool]:
+    multimodal = is_multimodal_model(model_dir)
+    if multimodal:
+        return AutoProcessor.from_pretrained(model_dir, trust_remote_code=True), True
+    return AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True), False
 
 
 def infer_lora_targets(model: torch.nn.Module) -> list[str]:
@@ -277,15 +306,16 @@ def main() -> int:
     seed_everything(args.seed)
     train_records = load_records(args.train_file)
     eval_records = load_records(args.eval_file) if args.eval_file else []
-    processor = AutoProcessor.from_pretrained(args.model_dir, trust_remote_code=True)
+    processor, multimodal_messages = load_chat_processor(args.model_dir)
     tokenizer = getattr(processor, "tokenizer", processor)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    train_dataset = ScenarioDataset(train_records, processor, args.max_length)
-    eval_dataset = ScenarioDataset(eval_records, processor, args.max_length) if eval_records else None
+    train_dataset = ScenarioDataset(train_records, processor, args.max_length, multimodal_messages)
+    eval_dataset = ScenarioDataset(eval_records, processor, args.max_length, multimodal_messages) if eval_records else None
     lengths = [len(train_dataset[index]["input_ids"]) for index in range(len(train_dataset))]
     print(f"train_records={len(train_records)} eval_records={len(eval_records)} seed={args.seed}")
+    print(f"model_family={'multimodal' if multimodal_messages else 'text'}")
     print(f"token_length min={min(lengths)} max={max(lengths)} avg={sum(lengths) / len(lengths):.1f}")
     if args.dry_run:
         print("dry_run=1; data and tokenization are valid.")

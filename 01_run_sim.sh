@@ -8,10 +8,10 @@ DEFAULT_PORT="${PORT:-4173}"
 DEFAULT_LLM_DIR="$(cd "$ROOT_DIR/.." && pwd)/$(basename "$ROOT_DIR")-LLM"
 LLM_DIR="${CYBERNH_LLM_DIR:-$DEFAULT_LLM_DIR}"
 export CYBERNH_LLM_DIR="$LLM_DIR"
-DEFAULT_LLM_MODEL="qwen3-vl-2b-instruct"
-DEFAULT_LLM_MODEL_ID="Qwen/Qwen3-VL-2B-Instruct"
-DEFAULT_LLM_MODEL_DIR="$LLM_DIR/models/Qwen3-VL-2B-Instruct"
-DEFAULT_RULES_ADAPTER_DIR="$LLM_DIR/adapters/rules-lora"
+DEFAULT_LLM_MODEL="qwen3-8b-instruct"
+DEFAULT_LLM_MODEL_ID="JunHowie/Qwen3-8B-Instruct"
+DEFAULT_LLM_MODEL_DIR="$LLM_DIR/models/Qwen3-8B-Instruct"
+DEFAULT_RULES_ADAPTER_DIR="$LLM_DIR/adapters/rules-lora-qwen3-8b"
 DEEPSEEK_DECISION_MODE="deepseek_api"
 LOCAL_DEEPSEEK_V4_FLASH_DECISION_MODE="local_deepseek_v4_flash"
 LLM_LOG_DIR="$ROOT_DIR/runtime/logs"
@@ -51,7 +51,7 @@ set_env_if_unset() {
   fi
 }
 
-set_local_2b_defaults() {
+set_local_qwen_defaults() {
   set_env_if_unset CYBERNH_LLM_PROVIDER "modelscope-transformers"
   set_env_if_unset CYBERNH_LLM_MODEL "$DEFAULT_LLM_MODEL"
   set_env_if_unset CYBERNH_LLM_MODEL_ID "$DEFAULT_LLM_MODEL_ID"
@@ -508,7 +508,7 @@ if [[ ! -d node_modules ]]; then
   npm install
 fi
 
-set_local_2b_defaults
+set_local_qwen_defaults
 load_env_defaults "$LLM_DIR/.env"
 load_env_defaults "$ROOT_DIR/config/deepseek.env"
 load_env_defaults "$ROOT_DIR/config/local_deepseek_v4_flash.env"
@@ -531,13 +531,13 @@ if uses_remote_api_mode; then
   echo "Remote model: $(remote_api_model)"
   if llm_endpoint_ready; then
     echo "Optional local Qwen endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
-    echo "Optional local Qwen model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
+    echo "Optional local Qwen model: ${CYBERNH_LLM_MODEL:-qwen3-8b-instruct}"
   else
     echo "Optional local Qwen endpoint: not started"
   fi
 else
   echo "LLM endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
-  echo "LLM model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
+  echo "LLM model: ${CYBERNH_LLM_MODEL:-qwen3-8b-instruct}"
 fi
 echo "System prompt mode: $PROMPT_MODE"
 echo "LLM start mode: $LLM_START_MODE"

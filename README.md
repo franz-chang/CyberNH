@@ -13,7 +13,7 @@ CyberNH 是一个面向养老院照护场景的多智能体仿真项目。它把
 - 双队列运行机制：Queue1 展示老人需求，Queue2 展示护理员和 Assistant 的调度记录。
 - Worker / Senior / Assistant Agent 提示词：位于 `runtime/prompts/`，用于约束不同角色的行为。
 - OpenAI-compatible LLM 接口：Worker-Agent 可通过本地或远程 LLM 生成结构化决策。
-- 本地 Qwen3-VL 运行支持：LLM 目录已移出仓库，默认放在项目同级的 `CyberNH-LLM`。
+- 本地 Qwen3 运行支持：LLM 目录已移出仓库，默认放在项目同级的 `CyberNH-LLM`。
 - 可视化调参面板：班次、人力、需求强度、照护模式、Agent 决策模式等均可在前端调整。
 - 中英文国际化：右上角 `中文 / English` 按钮可以切换面板显示语言。
 - 规则数据集：`rules/` 中包含从规则 PDF 抽取、结构化和整理后的训练/评估数据。
@@ -86,7 +86,7 @@ npm run check
 
 - 读取 `CyberNH-LLM/.env`
 - 检查本地 LLM endpoint 是否可用
-- 如 endpoint 未运行，则尝试启动本地 Qwen3-VL 服务
+- 如 endpoint 未运行，则尝试启动本地 Qwen3 服务
 - 等待 LLM 服务 ready
 - 启动 CyberNH 仿真面板
 
@@ -230,51 +230,51 @@ CYBERNH_LLM_DIR=/absolute/path/to/CyberNH-LLM ./S1_Start_llm.sh
 
 ### 本项目当前 LLM 设置
 
-本项目当前默认使用本地 Qwen3-VL 2B-Instruct，提供 OpenAI-compatible 接口给 CyberNH 调用。
+本项目当前默认使用本地 Qwen3-8B-Instruct，提供 OpenAI-compatible 接口给 CyberNH 调用。
 
 ```text
 Provider:       modelscope-transformers
-Model ID:       Qwen/Qwen3-VL-2B-Instruct
-Served model:   qwen3-vl-2b-instruct
+Model ID:       JunHowie/Qwen3-8B-Instruct
+Served model:   qwen3-8b-instruct
 Endpoint:       http://localhost:8000/v1
 Chat API:       http://localhost:8000/v1/chat/completions
 Runtime dir:    /Users/chongzhang/CyberNH-LLM
-Model dir:      /Users/chongzhang/CyberNH-LLM/models/Qwen3-VL-2B-Instruct
+Model dir:      /Users/chongzhang/CyberNH-LLM/models/Qwen3-8B-Instruct
 Python venv:    /Users/chongzhang/CyberNH-LLM/.venv
 ```
 
 LLM 目录是一个独立运行目录，不随 Git 仓库提交。这样可以避免把模型权重、虚拟环境、下载缓存和日志推到 GitHub。
 
-### 2B-Instruct 驱动模型处理流程
+### Qwen3-8B-Instruct 驱动模型处理流程
 
-项目中用于驱动 Agent 决策的基础模型是 `Qwen/Qwen3-VL-2B-Instruct`。我们没有把模型权重放入 Git 仓库，而是将它作为外部运行资产放在同级 `CyberNH-LLM` 目录中，由 ModelScope 下载脚本负责获取和更新。仓库内只保留启动脚本、提示词、数据集、微调脚本和评估脚本。
+项目中用于驱动 Agent 决策的基础模型是 `JunHowie/Qwen3-8B-Instruct`。我们没有把模型权重放入 Git 仓库，而是将它作为外部运行资产放在同级 `CyberNH-LLM` 目录中，由 ModelScope 下载脚本负责获取和更新。仓库内只保留启动脚本、提示词、数据集、微调脚本和评估脚本。
 
-2B-Instruct 的处理流程分为四步：
+Qwen3-8B-Instruct 的处理流程分为四步：
 
-1. **模型部署**：使用 `download_model.sh` 从 ModelScope 下载 `Qwen/Qwen3-VL-2B-Instruct`，并通过外部 `.env` 指定 `CYBERNH_LLM_LOCAL_DIR`、`CYBERNH_LLM_MODEL` 和 endpoint 配置。
+1. **模型部署**：使用 `download_model.sh` 从 ModelScope 下载 `JunHowie/Qwen3-8B-Instruct`，并通过外部 `.env` 指定 `CYBERNH_LLM_LOCAL_DIR`、`CYBERNH_LLM_MODEL` 和 endpoint 配置。
 2. **服务封装**：使用 Transformers 后端加载本地模型，并通过 `serve_transformers_openai.py` 包装成 OpenAI-compatible 服务，提供 `/v1/models`、`/v1/chat/completions` 和 `/health` 接口。CyberNH 只依赖这个标准接口，不直接耦合底层推理实现。
-3. **System Scenario 适配**：将 Worker / Senior / Assistant 的长 system prompt 压缩成 `[System Scenario 1]`、`[System Scenario 2]`、`[System Scenario 3]` 三个短标记，并用 runtime-shaped LoRA 数据让 2B-Instruct 学会这些短标记背后的结构化决策协议。
-4. **规则适配**：将 `rules/` 中从规则 PDF 抽取、结构化后的优先级、抢占、双人任务、隐性工作量和指标规则转换为监督样本，再训练 rules LoRA，使 2B-Instruct 在不反复发送长规则文本的情况下仍能输出符合规则的 JSON 决策。
+3. **System Scenario 适配**：将 Worker / Senior / Assistant 的长 system prompt 压缩成 `[System Scenario 1]`、`[System Scenario 2]`、`[System Scenario 3]` 三个短标记，并用 runtime-shaped LoRA 数据让 Qwen3-8B-Instruct 学会这些短标记背后的结构化决策协议。
+4. **规则适配**：将 `rules/` 中从规则 PDF 抽取、结构化后的优先级、抢占、双人任务、隐性工作量和指标规则转换为监督样本，再训练 rules LoRA，使 Qwen3-8B-Instruct 在不反复发送长规则文本的情况下仍能输出符合规则的 JSON 决策。
 
-因此，运行时的 2B-Instruct 不是裸基模直接决策，而是经过以下约束链路：
+因此，运行时的 Qwen3-8B-Instruct 不是裸基模直接决策，而是经过以下约束链路：
 
 ```text
-Qwen3-VL-2B-Instruct
+Qwen3-8B-Instruct
   -> OpenAI-compatible local endpoint
   -> System Scenario prompt-compression adapter
   -> rules / priority-reasoning adapter
   -> CyberNH structured Agent decision JSON
 ```
 
-当使用本地 2B-Instruct + adapter 驱动时，项目默认发送短 scenario 标记以减少 prompt token 开销。如果没有加载对应 adapter，或需要做保守对照实验，可以切回完整 system prompt：
+当使用本地 Qwen3-8B-Instruct + adapter 驱动时，项目默认发送短 scenario 标记以减少 prompt token 开销。如果没有加载对应 adapter，或需要做保守对照实验，可以切回完整 system prompt：
 
 ```bash
 CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh
 ```
 
-需要注意的是，LoRA adapter 与基模结构绑定。针对 `Qwen3-VL-2B-Instruct` 训练得到的 adapter 不能直接挂到 `Qwen3-VL-4B-Instruct` 上；如果切换到 4B，需要使用同一数据流程重新训练对应 adapter。
+需要注意的是，LoRA adapter 与基模结构绑定。针对 `Qwen3-VL-2B-Instruct` 训练得到的旧 adapter 不能直接挂到 `Qwen3-8B-Instruct` 上；切换到 8B 后需要使用同一数据流程重新训练对应 adapter。
 
-当前实际运行的 Worker 输入已默认切换到更短的 `compact_v2` 结构。固定 schema 约束下沉到 system prompt，运行时只发送动态状态、候选需求表和 `allowed_targets`，这样比旧版 `instruction + output_schema + observation` 长结构更省 token，也更适合 2B 模型稳定输出 JSON。
+当前实际运行的 Worker 输入已默认切换到更短的 `compact_v2` 结构。固定 schema 约束下沉到 system prompt，运行时只发送动态状态、候选需求表和 `allowed_targets`，这样比旧版 `instruction + output_schema + observation` 长结构更省 token，也更适合模型稳定输出 JSON。
 
 当前外部 LLM 目录应包含：
 
@@ -285,14 +285,14 @@ CyberNH-LLM/
 ├── README.md                    # LLM 运行目录说明
 ├── requirements.txt             # ModelScope/Transformers 依赖
 ├── setup_modelscope.sh          # 创建/更新 Python venv
-├── download_model.sh            # 下载 Qwen3-VL 模型
+├── download_model.sh            # 下载 Qwen3-8B 模型
 ├── serve_transformers.sh        # 启动 Transformers 服务
 ├── serve_transformers_openai.py # OpenAI-compatible server
 ├── serve_vllm.sh                # NVIDIA Linux/vLLM 可选入口
 ├── chat_cli.py                  # CLI 连续对话入口
 ├── .venv/                       # Python 虚拟环境
 └── models/
-    └── Qwen3-VL-2B-Instruct/
+    └── Qwen3-8B-Instruct/
 ```
 
 ### 首次准备 LLM 运行目录
@@ -320,7 +320,7 @@ cd /Users/chongzhang/CyberNH-LLM
 `download_model.sh` 会下载模型到：
 
 ```text
-/Users/chongzhang/CyberNH-LLM/models/Qwen3-VL-2B-Instruct
+/Users/chongzhang/CyberNH-LLM/models/Qwen3-8B-Instruct
 ```
 
 ### .env 示例
@@ -336,15 +336,17 @@ cd /Users/chongzhang/CyberNH-LLM
 ```bash
 CYBERNH_LLM_DIR=/Users/chongzhang/CyberNH-LLM
 CYBERNH_LLM_PROVIDER=modelscope-transformers
-CYBERNH_LLM_MODEL=qwen3-vl-2b-instruct
-CYBERNH_LLM_MODEL_ID=Qwen/Qwen3-VL-2B-Instruct
+CYBERNH_LLM_MODEL=qwen3-8b-instruct
+CYBERNH_LLM_MODEL_ID=JunHowie/Qwen3-8B-Instruct
 CYBERNH_LLM_BASE_URL=http://localhost:8000/v1
 CYBERNH_LLM_API_KEY=EMPTY
 CYBERNH_LLM_TEMPERATURE=0
 CYBERNH_LLM_MAX_TOKENS=5096
 CYBERNH_LLM_TIMEOUT_SECONDS=120
 CYBERNH_LLM_JSON_MODE=true
-CYBERNH_LLM_LOCAL_DIR=/Users/chongzhang/CyberNH-LLM/models/Qwen3-VL-2B-Instruct
+CYBERNH_LLM_LOCAL_DIR=/Users/chongzhang/CyberNH-LLM/models/Qwen3-8B-Instruct
+CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/rules-lora-qwen3-8b
+CYBERNH_LLM_ENABLE_THINKING=0
 CYBERNH_LLM_DEVICE=auto
 CYBERNH_LLM_DTYPE=auto
 CYBERNH_LLM_READY_TIMEOUT_SECONDS=600
@@ -352,7 +354,7 @@ CYBERNH_LLM_READY_TIMEOUT_SECONDS=600
 
 不要在 `.env` 中提交真实 API key。本仓库不会提交 `.env`、模型权重、虚拟环境和日志。
 
-### 启动本地 Qwen3-VL 服务
+### 启动本地 Qwen3 服务
 
 推荐从 CyberNH 项目目录启动：
 
@@ -401,7 +403,7 @@ CYBERNH_LLM_DTYPE=auto    # auto, float16, bfloat16, float32
 
 ### 远程 LLM 替代方案
 
-如果不使用本地 Qwen3-VL，只要目标服务兼容 OpenAI Chat Completions API，就可以这样运行：
+如果不使用本地 Qwen3，只要目标服务兼容 OpenAI Chat Completions API，就可以这样运行：
 
 ```bash
 CYBERNH_START_LLM=0 \
@@ -478,7 +480,7 @@ runtime/fine_tuning/system_scenarios/TRAINING_METHOD.md
 已完成一次 scenario-tag runtime-shaped LoRA 微调；随后又将规则数据继续训练并合并到当前默认 adapter。当前默认加载的 adapter 位于外部 LLM 目录：
 
 ```text
-/Users/chongzhang/CyberNH-LLM/adapters/rules-lora
+/Users/chongzhang/CyberNH-LLM/adapters/rules-lora-qwen3-8b
 ```
 
 训练摘要：
@@ -502,7 +504,7 @@ CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh
 外部 LLM `.env` 当前推荐启用：
 
 ```bash
-CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/rules-lora
+CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/rules-lora-qwen3-8b
 ```
 
 重新训练：
@@ -596,7 +598,7 @@ LLM model files are missing
 确认模型目录中存在 `.safetensors` 或 `.bin` 文件：
 
 ```text
-CyberNH-LLM/models/Qwen3-VL-2B-Instruct/
+CyberNH-LLM/models/Qwen3-8B-Instruct/
 ```
 
 ### 不想使用本地模型

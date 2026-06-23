@@ -1,6 +1,6 @@
 # CyberNH Rules LoRA
 
-This directory builds and trains a LoRA adapter that teaches the local Qwen3-VL runtime the curated rules under `rules/`.
+This directory builds and trains a LoRA adapter that teaches the local Qwen3-8B runtime the curated rules under `rules/`.
 
 It reuses the same training parameters as `runtime/fine_tuning/system_scenarios/run_lora_finetune.sh`:
 
@@ -30,11 +30,11 @@ runtime/fine_tuning/rules/run_lora_finetune.sh
 Default output:
 
 ```text
-/Users/chongzhang/CyberNH-LLM/adapters/rules-lora
+/Users/chongzhang/CyberNH-LLM/adapters/rules-lora-qwen3-8b
 ```
 
 To serve the local model with this adapter:
 
 ```bash
-CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/rules-lora ./S1_Start_llm.sh
+CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/rules-lora-qwen3-8b ./S1_Start_llm.sh
 ```

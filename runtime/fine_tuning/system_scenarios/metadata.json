@@ -1,7 +1,7 @@
 {
   "name": "cybernh-system-scenarios",
   "version": "2026-06-10",
-  "purpose": "Teach the local Qwen3-VL model that [System Scenario 1], [System Scenario 2], and [System Scenario 3] are compact replacements for CyberNH Worker, Senior, and Assistant system prompts.",
+  "purpose": "Teach the local Qwen3-8B model that [System Scenario 1], [System Scenario 2], and [System Scenario 3] are compact replacements for CyberNH Worker, Senior, and Assistant system prompts.",
   "scenario_map": {
     "[System Scenario 1]": "Worker-Agent",
     "[System Scenario 2]": "Senior-Agent",
