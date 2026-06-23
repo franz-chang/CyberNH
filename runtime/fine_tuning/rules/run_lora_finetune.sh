@@ -31,8 +31,8 @@ load_env_defaults() {
 load_env_defaults "$LLM_DIR/.env"
 
 PYTHON_BIN="${CYBERNH_LLM_PYTHON:-$LLM_DIR/.venv/bin/python}"
-MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-8B-Instruct}"
-OUTPUT_DIR="${CYBERNH_RULES_ADAPTER_DIR:-$LLM_DIR/adapters/rules-lora-qwen3-8b}"
+MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-VL-2B-Instruct}"
+OUTPUT_DIR="${CYBERNH_RULES_ADAPTER_DIR:-$LLM_DIR/adapters/rules-lora}"
 TRAIN_FILE="$RULES_FT_DIR/data/train_rules_augmented.jsonl"
 EVAL_FILE="$RULES_FT_DIR/data/eval_rules.jsonl"
 CASE_REPEAT="${CYBERNH_RULES_FINETUNE_CASE_REPEAT:-24}"

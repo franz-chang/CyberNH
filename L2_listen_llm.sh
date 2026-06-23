@@ -244,7 +244,7 @@ WATCH_AUTO_STEP="$AUTO_STEP" \
 WATCH_AUTO_DEMAND="$AUTO_DEMAND" \
 WATCH_STEP_INTERVAL_MS="$STEP_INTERVAL_MS" \
 WATCH_LLM_PROVIDER="${CYBERNH_LLM_PROVIDER:-modelscope-transformers}" \
-WATCH_LLM_MODEL="${CYBERNH_LLM_MODEL:-qwen3-8b-instruct}" \
+WATCH_LLM_MODEL="${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}" \
 WATCH_LLM_BASE_URL="${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}" \
 node <<'NODE'
 const WebSocket = require("ws");

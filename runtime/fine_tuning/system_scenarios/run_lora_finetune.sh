@@ -30,8 +30,8 @@ load_env_defaults() {
 load_env_defaults "$LLM_DIR/.env"
 
 PYTHON_BIN="${CYBERNH_LLM_PYTHON:-$LLM_DIR/.venv/bin/python}"
-MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-8B-Instruct}"
-OUTPUT_DIR="${CYBERNH_SCENARIO_ADAPTER_DIR:-$LLM_DIR/adapters/system-scenarios-lora-qwen3-8b}"
+MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-VL-2B-Instruct}"
+OUTPUT_DIR="${CYBERNH_SCENARIO_ADAPTER_DIR:-$LLM_DIR/adapters/system-scenarios-lora}"
 INSTALL_DEPS="${CYBERNH_FINETUNE_INSTALL_DEPS:-1}"
 BASE_TRAIN_FILE="$SCENARIO_DIR/data/train.jsonl"
 RUNTIME_TRAIN_FILE="$SCENARIO_DIR/data/train_runtime.jsonl"

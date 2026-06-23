@@ -34,15 +34,54 @@ load_env_defaults() {
 
 load_env_defaults "$LLM_DIR/.env"
 
+resolve_runtime_path() {
+  local value="$1"
+  local candidate=""
+  local base
+  local dir
+  local name
+
+  [[ -n "$value" ]] || return 0
+
+  case "$value" in
+    /*)
+      candidate="$value"
+      ;;
+    "~"*)
+      candidate="${value/#\~/$HOME}"
+      ;;
+    *)
+      for base in "$LLM_DIR" "$ROOT_DIR"; do
+        candidate="$base/$value"
+        [[ -e "$candidate" ]] && break
+      done
+      ;;
+  esac
+
+  if [[ -e "$candidate" ]]; then
+    dir="$(cd "$(dirname "$candidate")" && pwd -P)"
+    name="$(basename "$candidate")"
+    printf '%s/%s\n' "$dir" "$name"
+  else
+    printf '%s\n' "$candidate"
+  fi
+}
+
 BASE_URL="${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
 BASE_URL="${BASE_URL%/}"
-MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-8B-Instruct}"
-MODEL_NAME="${CYBERNH_LLM_MODEL:-qwen3-8b-instruct}"
+MODEL_DIR="${CYBERNH_LLM_LOCAL_DIR:-$LLM_DIR/models/Qwen3-VL-2B-Instruct}"
+MODEL_NAME="${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
 API_KEY="${CYBERNH_LLM_API_KEY:-EMPTY}"
 BACKGROUND="${CYBERNH_LLM_BACKGROUND:-0}"
 CHAT="${CYBERNH_LLM_CHAT:-1}"
 KEEP_ALIVE="${CYBERNH_LLM_KEEP_ALIVE:-0}"
 export CYBERNH_LLM_CLI_SHOW_TIMING="${CYBERNH_LLM_CLI_SHOW_TIMING:-1}"
+MODEL_DIR="$(resolve_runtime_path "$MODEL_DIR")"
+export CYBERNH_LLM_LOCAL_DIR="$MODEL_DIR"
+if [[ -n "${CYBERNH_LLM_ADAPTER_DIR:-}" ]]; then
+  CYBERNH_LLM_ADAPTER_DIR="$(resolve_runtime_path "$CYBERNH_LLM_ADAPTER_DIR")"
+  export CYBERNH_LLM_ADAPTER_DIR
+fi
 
 LLM_PID=""
 STARTED_LLM=0

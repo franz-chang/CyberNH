@@ -102,7 +102,7 @@ def load_llm_config(decision_mode: str | None = None, provider: str | None = Non
     return LLMConfig(
         provider=os.getenv("CYBERNH_LLM_PROVIDER", "modelscope-transformers"),
         provider_label="Local Qwen",
-        model=os.getenv("CYBERNH_LLM_MODEL", "qwen3-8b-instruct"),
+        model=os.getenv("CYBERNH_LLM_MODEL", "qwen3-vl-2b-instruct"),
         base_url=os.getenv("CYBERNH_LLM_BASE_URL", "http://localhost:8000/v1"),
         api_key=os.getenv("CYBERNH_LLM_API_KEY", "EMPTY"),
         api_key_env="CYBERNH_LLM_API_KEY",

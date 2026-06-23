@@ -108,11 +108,11 @@ def parse_args() -> argparse.Namespace:
     root = Path(__file__).resolve().parent
     default_llm_dir = Path(os.getenv("CYBERNH_LLM_DIR", "/Users/chongzhang/CyberNH-LLM"))
     parser = argparse.ArgumentParser(description="LoRA fine-tune Qwen3/Qwen3-VL for CyberNH system scenario tags.")
-    parser.add_argument("--model-dir", default=os.getenv("CYBERNH_LLM_LOCAL_DIR", str(default_llm_dir / "models" / "Qwen3-8B-Instruct")))
+    parser.add_argument("--model-dir", default=os.getenv("CYBERNH_LLM_LOCAL_DIR", str(default_llm_dir / "models" / "Qwen3-VL-2B-Instruct")))
     parser.add_argument("--base-adapter-dir", default=None, help="Optional existing LoRA adapter to continue training.")
     parser.add_argument("--train-file", default=str(root / "data" / "train_augmented_runtime.jsonl"))
     parser.add_argument("--eval-file", default=str(root / "data" / "eval.jsonl"))
-    parser.add_argument("--output-dir", default=str(default_llm_dir / "adapters" / "system-scenarios-lora-qwen3-8b"))
+    parser.add_argument("--output-dir", default=str(default_llm_dir / "adapters" / "system-scenarios-lora"))
     parser.add_argument("--max-steps", type=int, default=160)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=1)

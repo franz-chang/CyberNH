@@ -8,10 +8,10 @@ DEFAULT_PORT="${PORT:-4173}"
 DEFAULT_LLM_DIR="$(cd "$ROOT_DIR/.." && pwd)/$(basename "$ROOT_DIR")-LLM"
 LLM_DIR="${CYBERNH_LLM_DIR:-$DEFAULT_LLM_DIR}"
 export CYBERNH_LLM_DIR="$LLM_DIR"
-DEFAULT_LLM_MODEL="qwen3-8b-instruct"
-DEFAULT_LLM_MODEL_ID="JunHowie/Qwen3-8B-Instruct"
-DEFAULT_LLM_MODEL_DIR="$LLM_DIR/models/Qwen3-8B-Instruct"
-DEFAULT_RULES_ADAPTER_DIR="$LLM_DIR/adapters/rules-lora-qwen3-8b"
+DEFAULT_LLM_MODEL="qwen3-vl-2b-instruct"
+DEFAULT_LLM_MODEL_ID="Qwen/Qwen3-VL-2B-Instruct"
+DEFAULT_LLM_MODEL_DIR="$LLM_DIR/models/Qwen3-VL-2B-Instruct"
+DEFAULT_RULES_ADAPTER_DIR="$LLM_DIR/adapters/rules-lora"
 DEEPSEEK_DECISION_MODE="deepseek_api"
 LOCAL_DEEPSEEK_V4_FLASH_DECISION_MODE="local_deepseek_v4_flash"
 LLM_LOG_DIR="$ROOT_DIR/runtime/logs"
@@ -48,6 +48,39 @@ set_env_if_unset() {
   local value="$2"
   if [[ -z "${!key+x}" ]]; then
     export "$key=$value"
+  fi
+}
+
+resolve_runtime_path() {
+  local value="$1"
+  local candidate=""
+  local base
+  local dir
+  local name
+
+  [[ -n "$value" ]] || return 0
+
+  case "$value" in
+    /*)
+      candidate="$value"
+      ;;
+    "~"*)
+      candidate="${value/#\~/$HOME}"
+      ;;
+    *)
+      for base in "$LLM_DIR" "$ROOT_DIR"; do
+        candidate="$base/$value"
+        [[ -e "$candidate" ]] && break
+      done
+      ;;
+  esac
+
+  if [[ -e "$candidate" ]]; then
+    dir="$(cd "$(dirname "$candidate")" && pwd -P)"
+    name="$(basename "$candidate")"
+    printf '%s/%s\n' "$dir" "$name"
+  else
+    printf '%s\n' "$candidate"
   fi
 }
 
@@ -512,6 +545,14 @@ set_local_qwen_defaults
 load_env_defaults "$LLM_DIR/.env"
 load_env_defaults "$ROOT_DIR/config/deepseek.env"
 load_env_defaults "$ROOT_DIR/config/local_deepseek_v4_flash.env"
+if [[ -n "${CYBERNH_LLM_LOCAL_DIR:-}" ]]; then
+  CYBERNH_LLM_LOCAL_DIR="$(resolve_runtime_path "$CYBERNH_LLM_LOCAL_DIR")"
+  export CYBERNH_LLM_LOCAL_DIR
+fi
+if [[ -n "${CYBERNH_LLM_ADAPTER_DIR:-}" ]]; then
+  CYBERNH_LLM_ADAPTER_DIR="$(resolve_runtime_path "$CYBERNH_LLM_ADAPTER_DIR")"
+  export CYBERNH_LLM_ADAPTER_DIR
+fi
 PROMPT_MODE="${CYBERNH_SYSTEM_PROMPT_MODE:-scenario_alias}"
 REQUIRE_SCENARIO_ADAPTER="${CYBERNH_REQUIRE_SCENARIO_ADAPTER:-auto}"
 LLM_START_MODE="${CYBERNH_START_LLM:-auto}"
@@ -531,13 +572,13 @@ if uses_remote_api_mode; then
   echo "Remote model: $(remote_api_model)"
   if llm_endpoint_ready; then
     echo "Optional local Qwen endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
-    echo "Optional local Qwen model: ${CYBERNH_LLM_MODEL:-qwen3-8b-instruct}"
+    echo "Optional local Qwen model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
   else
     echo "Optional local Qwen endpoint: not started"
   fi
 else
   echo "LLM endpoint: ${CYBERNH_LLM_BASE_URL:-http://localhost:8000/v1}"
-  echo "LLM model: ${CYBERNH_LLM_MODEL:-qwen3-8b-instruct}"
+  echo "LLM model: ${CYBERNH_LLM_MODEL:-qwen3-vl-2b-instruct}"
 fi
 echo "System prompt mode: $PROMPT_MODE"
 echo "LLM start mode: $LLM_START_MODE"
