@@ -1,641 +1,258 @@
-# CyberNH
+# IDEA-Agent
 
-CyberNH 是一个面向养老院照护场景的多智能体仿真项目。它把老人需求、护理员资源、护理策略、设施地图、任务队列和 LLM 决策过程放在同一个可视化面板里，用来观察不同配置下的照护系统如何运行。
+`IDEA-Agent` 是一个面向论文的 Stage 1 `Article-KG` 编译器。它会把一篇学术或技术文章转换为一个可追溯的知识图谱，中间每个知识单元都绑定原文 `evidence span`。
 
-当前项目重点不是做一个静态演示页，而是一个可以运行、调参、监听队列、查看 LLM 输入输出、导出实验数据的本地仿真工作台。
+当前实现的是 MVP 闭环：
 
+- 文档解析
+- evidence span 切分
+- 章节角色识别
+- 语义归一化
+- 双视图知识抽取
+- KU 向量化
+- 类型感知聚类
+- 图谱构建与输出
 
-![CyberNH示意图](fig.jpg)
+项目位置：
 
-## 核心能力
+- 服务器目录：`/home/staff_xiaobo_jin/IDEA-Agent`
+- 虚拟环境：`/home/staff_xiaobo_jin/IDEA-Agent/idea`
 
-- 养老院 40 房间地图仿真：护理员、老人、需求点和路线会在地图上实时更新。
-- 双队列运行机制：Queue1 展示老人需求，Queue2 展示护理员和 Assistant 的调度记录。
-- Worker / Senior / Assistant Agent 提示词：位于 `runtime/prompts/`，用于约束不同角色的行为。
-- OpenAI-compatible LLM 接口：Worker-Agent 可通过本地或远程 LLM 生成结构化决策。
-- 本地 Qwen3 运行支持：LLM 目录已移出仓库，默认放在项目同级的 `CyberNH-LLM`。
-- 可视化调参面板：班次、人力、需求强度、照护模式、Agent 决策模式等均可在前端调整。
-- 中英文国际化：右上角 `中文 / English` 按钮可以切换面板显示语言。
-- 规则数据集：`rules/` 中包含从规则 PDF 抽取、结构化和整理后的训练/评估数据。
+## 目录说明
 
-## 目录结构
-
-```text
-CyberNH/
-├── 01_run_sim.sh              # 总启动脚本：启动 LLM 并运行仿真面板
-├── S1_Start_llm.sh            # 2B 本地 LLM 启动兼容入口
-├── S2_Start_2B_IN.sh          # 只启动本地 2B LLM，并可进入 CLI 连续对话
-├── S3_Start_4B_IN.sh          # 只启动本地 4B LLM，并可进入 CLI 连续对话
-├── S3_start_4B.sh             # 4B 本地 LLM 启动兼容入口
-├── L1_listen_queues.sh        # 监听 Queue1 / Queue2
-├── L2_listen_llm.sh           # 监听 Worker-Agent 的 LLM 输入输出
-├── server.js                  # Node.js HTTP/WebSocket 服务
-├── src/                       # 仿真核心、地图、LLM client、随机数等
-├── public/                    # 前端页面、样式和交互逻辑
-├── runtime/
-│   ├── agents/                # Python Agent 适配层和 schema
-│   └── prompts/               # Worker/Senior/Assistant system prompts
-└── rules/                     # 规则 PDF、抽取文本、结构化规则和数据集说明
-```
-
-LLM 运行目录不在本仓库内：
+项目的常用目录如下：
 
 ```text
-/Users/chongzhang/CyberNH-LLM
+IDEA-Agent/
+├── config.yaml
+├── input/
+├── outputs/
+├── run_scigraph_llm.sh
+├── examples/
+├── idea_agent/
+└── scripts/
 ```
 
-这个目录用于放模型权重、Python 虚拟环境、Transformers/OpenAI-compatible 服务脚本等重资产。它不进入 Git 仓库。
+其中：
 
-## 环境要求
+- `config.yaml`：LLM 与 pipeline 配置
+- `input/`：放待处理的论文 PDF
+- `outputs/`：放抽取结果
+- `run_scigraph_llm.sh`：固定处理 `input/SciGraph-LLM.pdf` 的一键脚本
+- `idea_agent/`：核心代码
 
-- Node.js `>=18`
-- npm
-- curl
-- macOS / Linux 均可运行仿真面板
-- 本地 LLM 运行需要额外准备 `CyberNH-LLM` 目录和模型文件
+## 第一次使用
 
-安装 Node 依赖：
+进入项目目录：
 
 ```bash
-npm install
+cd /home/staff_xiaobo_jin/IDEA-Agent
 ```
 
-检查项目语法：
+如果虚拟环境还没建好，运行：
 
 ```bash
-npm run check
+bash scripts/bootstrap_env.sh
 ```
 
-## 快速启动
-
-### 1. 使用本地 LLM 启动完整仿真
-
-默认情况下，项目会寻找同级目录：
-
-```text
-/Users/chongzhang/CyberNH-LLM
-```
-
-启动：
+然后激活环境：
 
 ```bash
-./01_run_sim.sh
+source idea/bin/activate
 ```
 
-脚本会做这些事：
+## 配置文件
 
-- 读取 `CyberNH-LLM/.env`
-- 检查本地 LLM endpoint 是否可用
-- 如 endpoint 未运行，则尝试启动本地 Qwen3 服务
-- 等待 LLM 服务 ready
-- 启动 CyberNH 仿真面板
+项目默认从根目录下的 `config.yaml` 读取配置：
 
-面板地址会在终端输出，默认从 `http://localhost:4173` 开始，如端口被占用会自动递增。
+`/home/staff_xiaobo_jin/IDEA-Agent/config.yaml`
 
-### 2. 只启动仿真面板，不自动启动 LLM
+当前配置格式：
 
-如果你已经有远程或外部 OpenAI-compatible endpoint：
+```yaml
+llm:
+  provider: deepseek
+  api_key: "你的 key"
+  base_url: "https://api.deepseek.com/v1"
+  model: "deepseek-chat"
+  timeout: 60
+
+pipeline:
+  similarity_threshold: 0.82
+  embedding_dimensions: 256
+```
+
+你只需要把：
+
+```yaml
+api_key: "你的 key"
+```
+
+替换成真实的 DeepSeek API key。
+
+如果 `api_key` 还是占位符，系统会自动退回规则模式，不会调用 LLM。
+
+## 输入文件准备
+
+建议先创建输入目录：
 
 ```bash
-CYBERNH_START_LLM=0 \
-CYBERNH_LLM_BASE_URL=http://your-llm-host:8000/v1 \
-CYBERNH_LLM_API_KEY=EMPTY \
-./01_run_sim.sh
+mkdir -p /home/staff_xiaobo_jin/IDEA-Agent/input
 ```
 
-### 3. 使用 DeepSeek API 驱动 Agent 决策
+然后把论文上传到这里，例如：
 
-DeepSeek API 分支不依赖本地 LoRA / adapter，因此项目会为 Worker-Agent 发送完整 `runtime/prompts/worker_agent.system.md`，而不是短标记 System Scenario。默认情况下，`./01_run_sim.sh` 在 DeepSeek 模式下不会再自动拉起本地 Qwen；如果想两套都准备好，可以显式加上 `CYBERNH_START_LLM=1`。
+`/home/staff_xiaobo_jin/IDEA-Agent/input/SciGraph-LLM.pdf`
 
-DeepSeek 参数文件位于：
+## 运行方式
 
-```text
-config/deepseek.env
-```
+默认编译流程使用 `lazy` evidence 模式：先按章节合并为较大的 processing chunks，再在知识单元抽取完成后，只为被引用的句子生成细粒度 `EvidenceSpan`。这能显著减少 LLM 调用次数，同时保留证据追溯。
 
-填入 API key 后直接启动：
+可选模式：
+
+- `--span-mode lazy`：默认模式，chunk-first 抽取，延迟生成句子级 evidence
+- `--span-mode chunked`：使用 chunk 作为 evidence，速度快但证据较粗
+- `--span-mode paragraph`：旧流程，逐 paragraph span 处理
+
+`lazy` 模式的证据匹配默认使用 `--evidence-backend auto`。如果环境中安装了 `torch` 且 CUDA 可用，会用 GPU 批量匹配 KU 与候选句子；否则自动退回词法匹配。
+
+### 方式 1：直接运行固定脚本
+
+如果输入文件是：
+
+`/home/staff_xiaobo_jin/IDEA-Agent/input/SciGraph-LLM.pdf`
+
+那么直接运行：
 
 ```bash
-./01_run_sim.sh
+cd /home/staff_xiaobo_jin/IDEA-Agent
+./run_scigraph_llm.sh
 ```
 
-参数文件内容示例：
+输出会写到：
+
+`/home/staff_xiaobo_jin/IDEA-Agent/outputs/SciGraph-LLM`
+
+### 方式 2：手动运行命令
 
 ```bash
-CYBERNH_DEFAULT_AGENT_DECISION_MODE=deepseek_api
-CYBERNH_DEEPSEEK_API_KEY=sk-...
-CYBERNH_DEEPSEEK_BASE_URL=https://api.deepseek.com
-CYBERNH_DEEPSEEK_MODEL=deepseek-v4-flash
-CYBERNH_DEEPSEEK_TEMPERATURE=0
-CYBERNH_DEEPSEEK_MAX_TOKENS=512
-CYBERNH_DEEPSEEK_TIMEOUT_SECONDS=120
-CYBERNH_DEEPSEEK_JSON_MODE=true
-CYBERNH_DEEPSEEK_THINKING=disabled
+cd /home/staff_xiaobo_jin/IDEA-Agent
+source idea/bin/activate
+idea-agent compile input/SciGraph-LLM.pdf \
+  --doc-id SciGraph-LLM \
+  --output outputs/SciGraph-LLM \
+  --config config.yaml
 ```
 
-`config/deepseek.env` 已被 `.gitignore` 忽略，不会提交真实 API key。命令行中显式传入的环境变量仍然优先。
+### 方式 3：处理其他 PDF
 
-也可以在前端 `照护策略 -> Agent 决策` 中切换到 `DeepSeek API 驱动`。该模式使用 DeepSeek 的 OpenAI-compatible `/chat/completions` 接口，并开启 JSON Output。
+例如你上传了：
 
-### 3.1 使用本地 DeepSeek-V4-Flash 驱动 Agent 决策
+`/home/staff_xiaobo_jin/IDEA-Agent/input/paper_001.pdf`
 
-项目现已增加 `本地 DeepSeek-V4-Flash` 分支。这里的“本地”指的是你本机项目直接调用中国科技云 Uni-API，而不是启动本地权重服务。
-
-配置文件位于：
-
-```text
-config/local_deepseek_v4_flash.env
-```
-
-示例模板位于：
-
-```text
-config/local_deepseek_v4_flash.env.example
-```
-
-当前默认配置遵循中国科技云文档：
-
-- `BASE_URL`: `https://uni-api.cstcloud.cn/v1`
-- `model`: `deepseek-v4-flash`
-- `max_length`: `5120`
-- 文档链接: `https://uni-api.cstcloud.cn/doc/llm/`
-
-这一分支会：
-
-- 使用完整 system prompt，而不是本地 LoRA 短标记模式
-- 请求体改用 Uni-API 文档中的 `max_length`
-- 如启用思考，会发送 `chat_template_kwargs: {"thinking": true}`
-
-前端中可以直接在 `照护策略 -> Agent 决策` 里切换到 `本地 DeepSeek-V4-Flash`。
-
-### 4. 只启动本地 LLM
+可以运行：
 
 ```bash
-./S1_Start_llm.sh
+cd /home/staff_xiaobo_jin/IDEA-Agent
+source idea/bin/activate
+idea-agent compile input/paper_001.pdf \
+  --doc-id paper_001 \
+  --output outputs/paper_001 \
+  --config config.yaml
 ```
 
-默认会启动 LLM 服务，并进入 CLI 连续对话。
-
-常用模式：
+### 方式 4：禁用 LLM，仅跑规则闭环
 
 ```bash
-# 只启动服务，不进入 CLI 对话
-CYBERNH_LLM_CHAT=0 ./S1_Start_llm.sh
-
-# 后台启动服务并保持运行
-CYBERNH_LLM_CHAT=0 CYBERNH_LLM_BACKGROUND=1 ./S1_Start_llm.sh
-
-# 退出 CLI 后不停止 LLM 服务
-CYBERNH_LLM_KEEP_ALIVE=1 ./S1_Start_llm.sh
+cd /home/staff_xiaobo_jin/IDEA-Agent
+source idea/bin/activate
+idea-agent compile input/paper_001.pdf \
+  --doc-id paper_001 \
+  --output outputs/paper_001 \
+  --config config.yaml \
+  --no-llm
 ```
 
-如果 LLM 目录放在其他位置：
+## 输出文件说明
+
+每次运行会在指定输出目录下生成：
+
+- `document.json`：文档与章节信息
+- `spans.jsonl`：evidence span 列表
+- `normalized_views.jsonl`：归一化语义视图
+- `knowledge_units.jsonl`：抽取出的知识单元
+- `ku_embeddings.jsonl`：KU 向量
+- `clusters.json`：类型感知聚类结果
+- `graph.json`：最终知识图谱
+- `pipeline_report.json`：运行摘要
+
+其中最常看的通常是：
+
+- `graph.json`
+- `knowledge_units.jsonl`
+- `spans.jsonl`
+- `pipeline_report.json`
+
+## 一个完整示例
 
 ```bash
-CYBERNH_LLM_DIR=/absolute/path/to/CyberNH-LLM ./S1_Start_llm.sh
+cd /home/staff_xiaobo_jin/IDEA-Agent
+source idea/bin/activate
+mkdir -p input outputs
+idea-agent compile examples/sample_article.md \
+  --doc-id sample \
+  --output outputs/sample \
+  --config config.yaml
 ```
 
-## 监听工具
+## 目前是否使用预训练模型
 
-### 监听队列
+当前默认实现里：
 
-```bash
-./L1_listen_queues.sh
-```
+- PDF 解析使用 `PyMuPDF`
+- 章节角色识别、规则归一化、规则抽取使用规则逻辑
+- 向量化使用确定性的 `hash embedding`
+- 聚类使用基于相似度阈值的类型内聚类
 
-常用参数：
+所以：
 
-```bash
-./L1_listen_queues.sh --auto
-./L1_listen_queues.sh --manual-demand 3
-./L1_listen_queues.sh --once
-```
-
-### 监听 LLM 输入输出
-
-```bash
-./L2_listen_llm.sh
-```
-
-常用参数：
-
-```bash
-./L2_listen_llm.sh --auto
-./L2_listen_llm.sh --manual-demand 3
-```
-
-这个脚本只打印 Worker-Agent 的 LLM request / reply，适合调试提示词、schema 和模型决策质量。
-
-## LLM 配置
-
-### 本项目当前 LLM 设置
-
-本项目当前默认使用本地 Qwen3-8B-Instruct，提供 OpenAI-compatible 接口给 CyberNH 调用。
-
-```text
-Provider:       modelscope-transformers
-Model ID:       JunHowie/Qwen3-8B-Instruct
-Served model:   qwen3-8b-instruct
-Endpoint:       http://localhost:8000/v1
-Chat API:       http://localhost:8000/v1/chat/completions
-Runtime dir:    /Users/chongzhang/CyberNH-LLM
-Model dir:      /Users/chongzhang/CyberNH-LLM/models/Qwen3-8B-Instruct
-Python venv:    /Users/chongzhang/CyberNH-LLM/.venv
-```
-
-LLM 目录是一个独立运行目录，不随 Git 仓库提交。这样可以避免把模型权重、虚拟环境、下载缓存和日志推到 GitHub。
-
-### Qwen3-8B-Instruct 驱动模型处理流程
-
-项目中用于驱动 Agent 决策的基础模型是 `JunHowie/Qwen3-8B-Instruct`。我们没有把模型权重放入 Git 仓库，而是将它作为外部运行资产放在同级 `CyberNH-LLM` 目录中，由 ModelScope 下载脚本负责获取和更新。仓库内只保留启动脚本、提示词、数据集、微调脚本和评估脚本。
-
-Qwen3-8B-Instruct 的处理流程分为四步：
-
-1. **模型部署**：使用 `download_model.sh` 从 ModelScope 下载 `JunHowie/Qwen3-8B-Instruct`，并通过外部 `.env` 指定 `CYBERNH_LLM_LOCAL_DIR`、`CYBERNH_LLM_MODEL` 和 endpoint 配置。
-2. **服务封装**：使用 Transformers 后端加载本地模型，并通过 `serve_transformers_openai.py` 包装成 OpenAI-compatible 服务，提供 `/v1/models`、`/v1/chat/completions` 和 `/health` 接口。CyberNH 只依赖这个标准接口，不直接耦合底层推理实现。
-3. **System Scenario 适配**：将 Worker / Senior / Assistant 的长 system prompt 压缩成 `[System Scenario 1]`、`[System Scenario 2]`、`[System Scenario 3]` 三个短标记，并用 runtime-shaped LoRA 数据让 Qwen3-8B-Instruct 学会这些短标记背后的结构化决策协议。
-4. **规则适配**：将 `rules/` 中从规则 PDF 抽取、结构化后的优先级、抢占、双人任务、隐性工作量和指标规则转换为监督样本，再训练 rules LoRA，使 Qwen3-8B-Instruct 在不反复发送长规则文本的情况下仍能输出符合规则的 JSON 决策。
-
-因此，运行时的 Qwen3-8B-Instruct 不是裸基模直接决策，而是经过以下约束链路：
-
-```text
-Qwen3-8B-Instruct
-  -> OpenAI-compatible local endpoint
-  -> System Scenario prompt-compression adapter
-  -> rules / priority-reasoning adapter
-  -> CyberNH structured Agent decision JSON
-```
-
-当使用本地 Qwen3-8B-Instruct + adapter 驱动时，项目默认发送短 scenario 标记以减少 prompt token 开销。如果没有加载对应 adapter，或需要做保守对照实验，可以切回完整 system prompt：
-
-```bash
-CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh
-```
-
-需要注意的是，LoRA adapter 与基模结构绑定。针对 `Qwen3-VL-2B-Instruct` 训练得到的旧 adapter 不能直接挂到 `Qwen3-8B-Instruct` 上；切换到 8B 后需要使用同一数据流程重新训练对应 adapter。
-
-当前实际运行的 Worker 输入已默认切换到更短的 `compact_v2` 结构。固定 schema 约束下沉到 system prompt，运行时只发送动态状态、候选需求表和 `allowed_targets`，这样比旧版 `instruction + output_schema + observation` 长结构更省 token，也更适合模型稳定输出 JSON。
-
-当前外部 LLM 目录应包含：
-
-```text
-CyberNH-LLM/
-├── .env                         # 本机实际配置，不进 Git
-├── .env.example                 # 示例配置
-├── README.md                    # LLM 运行目录说明
-├── requirements.txt             # ModelScope/Transformers 依赖
-├── setup_modelscope.sh          # 创建/更新 Python venv
-├── download_model.sh            # 下载 Qwen3-8B 模型
-├── serve_transformers.sh        # 启动 Transformers 服务
-├── serve_transformers_openai.py # OpenAI-compatible server
-├── serve_vllm.sh                # NVIDIA Linux/vLLM 可选入口
-├── chat_cli.py                  # CLI 连续对话入口
-├── .venv/                       # Python 虚拟环境
-└── models/
-    └── Qwen3-8B-Instruct/
-```
-
-### 首次准备 LLM 运行目录
-
-如果是在这台机器上继续开发，默认目录已经是：
-
-```text
-/Users/chongzhang/CyberNH-LLM
-```
-
-如果迁移到新机器，需要先准备同级外部目录，并在其中放置 LLM 运行脚本和 `.env.example`，然后执行：
-
-```bash
-cd /Users/chongzhang/CyberNH-LLM
-./setup_modelscope.sh
-./download_model.sh
-```
-
-`setup_modelscope.sh` 会创建或更新：
-
-```text
-/Users/chongzhang/CyberNH-LLM/.venv
-```
-
-`download_model.sh` 会下载模型到：
-
-```text
-/Users/chongzhang/CyberNH-LLM/models/Qwen3-8B-Instruct
-```
-
-### .env 示例
-
-项目通过环境变量读取 LLM 配置。默认值通常来自外部目录：
-
-```text
-/Users/chongzhang/CyberNH-LLM/.env
-```
-
-当前推荐配置：
-
-```bash
-CYBERNH_LLM_DIR=/Users/chongzhang/CyberNH-LLM
-CYBERNH_LLM_PROVIDER=modelscope-transformers
-CYBERNH_LLM_MODEL=qwen3-8b-instruct
-CYBERNH_LLM_MODEL_ID=JunHowie/Qwen3-8B-Instruct
-CYBERNH_LLM_BASE_URL=http://localhost:8000/v1
-CYBERNH_LLM_API_KEY=EMPTY
-CYBERNH_LLM_TEMPERATURE=0
-CYBERNH_LLM_MAX_TOKENS=5096
-CYBERNH_LLM_TIMEOUT_SECONDS=120
-CYBERNH_LLM_JSON_MODE=true
-CYBERNH_LLM_LOCAL_DIR=/Users/chongzhang/CyberNH-LLM/models/Qwen3-8B-Instruct
-CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/rules-lora-qwen3-8b
-CYBERNH_LLM_ENABLE_THINKING=0
-CYBERNH_LLM_DEVICE=auto
-CYBERNH_LLM_DTYPE=auto
-CYBERNH_LLM_READY_TIMEOUT_SECONDS=600
-```
-
-不要在 `.env` 中提交真实 API key。本仓库不会提交 `.env`、模型权重、虚拟环境和日志。
-
-### 启动本地 Qwen3 服务
-
-推荐从 CyberNH 项目目录启动：
-
-```bash
-cd /Users/chongzhang/CyberNH
-./S1_Start_llm.sh
-```
-
-这个脚本会读取 `/Users/chongzhang/CyberNH-LLM/.env`，检查模型文件和虚拟环境，然后启动：
-
-```bash
-/Users/chongzhang/CyberNH-LLM/serve_transformers.sh
-```
-
-服务 ready 后，`S1_Start_llm.sh` 默认会进入 CLI 连续对话。CLI 命令：
-
-```text
-/help      显示命令
-/reset     清空当前对话历史
-/history   查看当前消息数
-/exit      退出 CLI
-```
-
-如果只想启动服务：
-
-```bash
-CYBERNH_LLM_CHAT=0 ./S1_Start_llm.sh
-```
-
-如果要后台启动并保持运行：
-
-```bash
-CYBERNH_LLM_CHAT=0 CYBERNH_LLM_BACKGROUND=1 ./S1_Start_llm.sh
-```
-
-### 设备与后端
-
-默认后端是 Transformers，适合 macOS/Apple Silicon 的本地测试。设备选择由下面两个变量控制：
-
-```bash
-CYBERNH_LLM_DEVICE=auto   # auto, mps, cuda, cpu
-CYBERNH_LLM_DTYPE=auto    # auto, float16, bfloat16, float32
-```
-
-在 macOS 上，`auto` 会优先尝试 MPS。若迁移到 NVIDIA Linux 主机，可以考虑使用外部目录中的 `serve_vllm.sh`，但需要先在该 venv 中安装 vLLM。
-
-### 远程 LLM 替代方案
-
-如果不使用本地 Qwen3，只要目标服务兼容 OpenAI Chat Completions API，就可以这样运行：
-
-```bash
-CYBERNH_START_LLM=0 \
-CYBERNH_LLM_PROVIDER=openai-compatible \
-CYBERNH_LLM_BASE_URL=http://your-llm-host:8000/v1 \
-CYBERNH_LLM_API_KEY=your-key \
-CYBERNH_LLM_MODEL=your-served-model \
-./01_run_sim.sh
-```
-
-## Agent 与提示词
-
-提示词位于：
-
-```text
-runtime/prompts/
-├── assistant_agent.system.md
-├── senior_agent.system.md
-└── worker_agent.system.md
-```
-
-LLM 输出需要符合结构化决策协议。相关 schema 和适配层位于：
-
-```text
-runtime/agents/
-src/llmClient.js
-```
-
-仿真器会校验 Worker-Agent 的目标需求是否合法，避免模型选择不在候选集中的 demand。
-
-## System Scenario 微调
-
-为减少 multi-Agent 运行时反复发送长 system prompt 的 token 开销，本项目已把三类 system prompt 压缩为短标记：
-
-```text
-[System Scenario 1] -> Worker-Agent
-[System Scenario 2] -> Senior-Agent
-[System Scenario 3] -> Assistant-Agent
-```
-
-运行时代码默认使用短标记：
-
-- Python/CAMEL 侧：`runtime/agents/prompt_registry.py`
-- Node Worker LLM 侧：`src/llmClient.js`
-- 映射文件：`runtime/prompts/scenario_aliases.json`
-
-如需临时退回原始长 prompt：
-
-```bash
-CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh
-```
-
-微调数据与脚本位于：
-
-```text
-runtime/fine_tuning/system_scenarios/
-├── data/train.jsonl
-├── data/train_runtime.jsonl
-├── data/train_augmented_runtime.jsonl
-├── data/eval.jsonl
-├── build_runtime_payload_dataset.py
-├── evaluate_adapter.py
-├── validate_dataset.py
-├── train_lora.py
-└── run_lora_finetune.sh
-```
-
-训练方法说明见：
-
-```text
-runtime/fine_tuning/system_scenarios/TRAINING_METHOD.md
-```
-
-已完成一次 scenario-tag runtime-shaped LoRA 微调；随后又将规则数据继续训练并合并到当前默认 adapter。当前默认加载的 adapter 位于外部 LLM 目录：
-
-```text
-/Users/chongzhang/CyberNH-LLM/adapters/rules-lora-qwen3-8b
-```
-
-训练摘要：
-
-```text
-scenario train records: 56
-scenario eval records:  6
-LoRA rank:     8
-trainable:     8,716,288 params
-steps:         160
-scenario behavior eval: 6/6 passed
-rules behavior eval:    7/7 passed
-```
-
-行为评估会先检查 `/v1/health` 是否报告了当前 adapter，再用 `[System Scenario 1]`、`[System Scenario 2]`、`[System Scenario 3]` 跑结构化决策样例。当前训练方法使用 runtime-shaped 数据、边界样本和行为回归锚点，已让本地 6 条 scenario-tag 行为回归全部通过。这个 100% 是当前回归集口径，不等价于所有未见场景都已覆盖。保守运行时仍可继续使用：
-
-```bash
-CYBERNH_SYSTEM_PROMPT_MODE=full ./01_run_sim.sh
-```
-
-外部 LLM `.env` 当前推荐启用：
-
-```bash
-CYBERNH_LLM_ADAPTER_DIR=/Users/chongzhang/CyberNH-LLM/adapters/rules-lora-qwen3-8b
-```
-
-重新训练：
-
-```bash
-runtime/fine_tuning/system_scenarios/run_lora_finetune.sh \
-  --train-file runtime/fine_tuning/system_scenarios/data/train_augmented_runtime.jsonl \
-  --max-steps 160 \
-  --epochs 40 \
-  --batch-size 1 \
-  --grad-accum 1 \
-  --learning-rate 0.0003 \
-  --lora-rank 8 \
-  --lora-alpha 16 \
-  --lora-dropout 0
-```
-
-测试 adapter 是否加载并具备目标行为：
-
-```bash
-CYBERNH_LLM_CHAT=0 ./S1_Start_llm.sh
-
-/Users/chongzhang/CyberNH-LLM/.venv/bin/python \
-  runtime/fine_tuning/system_scenarios/evaluate_adapter.py
-```
-
-只做数据和 tokenizer dry-run：
-
-```bash
-runtime/fine_tuning/system_scenarios/run_lora_finetune.sh --dry-run
-```
-
-## 规则数据集
-
-`rules/` 目录保存了规则资料的加工结果：
-
-```text
-rules/raw/                 # 原始 PDF
-rules/extracted/           # 抽取后的文本和 pdfinfo
-rules/structured/          # 结构化 rules.jsonl、metrics.jsonl、schema
-rules/datasets/            # 训练种子数据和评估样例
-rules/reports/             # 覆盖率和整理报告
-rules/README.md            # 数据集详细说明
-```
-
-这些数据可以用于后续微调、RAG 或规则约束实验。
-
-## 前端面板
-
-前端代码在 `public/`：
-
-- `index.html`：页面结构
-- `styles.css`：界面样式
-- `app.js`：WebSocket、状态渲染、国际化、控制面板逻辑
-
-右上角语言切换只影响显示层，不修改后端仿真状态和导出数据。
-
-## 数据导出
-
-前端面板提供实验数据导出按钮，会下载：
-
-- `cybernh-events.jsonl`
-- `cybernh-metrics.csv`
-
-这些接口由 `server.js` 提供。
+- 没填 DeepSeek key 时：不使用预训练模型
+- 填入 DeepSeek key 后：会通过 API 调用外部大模型参与语义归一化和知识抽取
 
 ## 常见问题
 
-### 找不到 LLM 虚拟环境
+### 1. 运行时报找不到输入文件
 
-如果看到：
-
-```text
-LLM virtualenv is missing
-```
-
-说明 `CYBERNH_LLM_DIR` 指向的目录中没有 `.venv`。确认外部 LLM 目录存在，或显式指定：
+先检查输入文件是否真的在：
 
 ```bash
-CYBERNH_LLM_DIR=/absolute/path/to/CyberNH-LLM ./S1_Start_llm.sh
+ls -l /home/staff_xiaobo_jin/IDEA-Agent/input
 ```
 
-### 找不到模型文件
+### 2. 运行时没有调用 LLM
 
-如果看到：
-
-```text
-LLM model files are missing
-```
-
-确认模型目录中存在 `.safetensors` 或 `.bin` 文件：
-
-```text
-CyberNH-LLM/models/Qwen3-8B-Instruct/
-```
-
-### 不想使用本地模型
-
-可以直接连接远程 OpenAI-compatible endpoint：
+先检查：
 
 ```bash
-CYBERNH_START_LLM=0 \
-CYBERNH_LLM_BASE_URL=http://your-llm-host:8000/v1 \
-CYBERNH_LLM_API_KEY=your-key \
-./01_run_sim.sh
+sed -n '1,20p' /home/staff_xiaobo_jin/IDEA-Agent/config.yaml
 ```
 
-### LLM 返回非法 JSON
+确认 `api_key` 已经替换成真实 key，而不是：
 
-Worker-Agent 决策要求结构化 JSON。项目会尝试一次修复请求；如果仍然失败，会记录 LLM 输入、输出和错误原因，便于在 `L2_listen_llm.sh` 中排查。
+```yaml
+api_key: "你的 key"
+```
 
-## 开发检查
+### 3. 想看一次运行有没有成功
+
+可以看输出目录里的：
 
 ```bash
-npm run check
-bash -n 01_run_sim.sh S1_Start_llm.sh S2_Start_2B_IN.sh S3_Start_4B_IN.sh S3_start_4B.sh L1_listen_queues.sh L2_listen_llm.sh
+ls -l outputs/SciGraph-LLM
+cat outputs/SciGraph-LLM/pipeline_report.json
 ```
 
-## Git 说明
+## 备注
 
-仓库地址：
-
-```text
-git@github.com:franz-chang/CyberNH.git
-```
-
-不会进入 Git 的内容包括：
-
-- `node_modules/`
-- `runtime/logs/`
-- `.env`
-- `.venv/`
-- Python `__pycache__/`
-- 外部 `CyberNH-LLM/`
+- 这个项目已经按公共服务器环境做了隔离，运行依赖都在 `idea` 虚拟环境里。
+- 当前服务器磁盘空间比较紧，后续如果批量处理很多论文，建议定期清理 `outputs/`。

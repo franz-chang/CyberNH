@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="academic-paper">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LLM-Driven Agent 社会科学仿真研究</title>
+  <link rel="stylesheet" href="assets/fonts.css">
+  <link rel="stylesheet" href="assets/base.css">
+  <link rel="stylesheet" id="theme-link" href="assets/themes/academic-paper.css">
+  <link rel="stylesheet" href="assets/animations/animations.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-themes="academic-paper,engineering-whiteprint,corporate-clean,blueprint,catppuccin-latte" data-theme-base="assets/themes/">
+<div class="deck">
+
+  <section class="slide" data-title="Cover">
+    <div class="cover-grid">
+      <div>
+        <p class="kicker">Multi-Agent Social Simulation</p>
+        <h1 class="cover-title anim-fade-up" data-anim="fade-up">LLM-Driven Agent<br>社会科学仿真的<br>方法、场景与边界</h1>
+        <p class="lede">从教育、信任、市场竞争到历史战争：如何把 LLM Agent 用作可验证的社会机制模拟器。</p>
+        <p class="dim mt-m">Chong Zhang · Xi'an Jiaotong-Liverpool University</p>
+      </div>
+      <div class="cover-panel">
+        <div class="mini-matrix">
+          <div><strong>EduMirror</strong>教育社会动力学与价值驱动行为</div>
+          <div><strong>Trust Behavior</strong>信任博弈中的微观行为校准</div>
+          <div><strong>CompeteAI</strong>餐厅竞争市场中的宏观涌现</div>
+          <div><strong>WarAgent</strong>国家 Agent 与战争路径反事实</div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">开场强调这不是单纯介绍四篇论文，而是用四个案例观察 LLM Agent 社会仿真的共通方法、实验逻辑和边界。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="1" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="Overview">
+    <p class="kicker">Overview</p>
+    <h2 class="title-tight">四个案例覆盖从个体心理到宏观历史的不同研究层级</h2>
+    <table class="overview-table mt-l">
+      <thead>
+        <tr><th>论文</th><th>场景</th><th>核心问题</th><th>仿真层级</th><th>主要贡献</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>EduMirror</td><td>教育与社会心理场景</td><td>LLM Agent 能否承载教育理论并生成可解释行为</td><td>中观 / 干预</td><td>价值驱动的教育社会动力学模拟</td></tr>
+        <tr><td>Trust Behavior</td><td>信任博弈与经济实验</td><td>Agent trust 是否与 human trust 对齐</td><td>微观 / 校准</td><td>用受控实验检验信任、风险和互惠机制</td></tr>
+        <tr><td>CompeteAI</td><td>餐厅竞争市场</td><td>竞争 Agent 能否形成策略适应和宏观市场现象</td><td>系统 / 涌现</td><td>观察差异化、模仿、马太效应和赢家通吃</td></tr>
+        <tr><td>WarAgent</td><td>一战、二战、战国冲突</td><td>国家 Agent 能否复现战争路径并支持反事实分析</td><td>宏观 / 历史</td><td>模拟战争触发因素和历史不可避免性</td></tr>
+      </tbody>
+    </table>
+    <aside class="notes">这一页先建立坐标系：微观、系统、应用、历史。后面的四个案例都围绕“构建方式、实验方式、分析方式”展开。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="2" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="EduMirror Method">
+    <span class="case-label"><span class="num">Case 01</span> EduMirror</span>
+    <h2 class="title-tight">把教育理论转译成 Agent 的价值系统与互动机制</h2>
+    <div class="research-strip">
+      <div><strong>社会动力学</strong><span>学生、教师、家长与同伴如何在互动中形成行为变化。</span></div>
+      <div><strong>价值驱动</strong><span>Agent 是否能根据心理需求与社会价值产生理论一致行为。</span></div>
+      <div><strong>干预分析</strong><span>系统是否支持教育干预、反事实比较和机制追踪。</span></div>
+    </div>
+    <div class="figure-box edumirror-hero"><img src="media/edumirror.png" alt="EduMirror framework"></div>
+    <p class="citation">Lin J, Yu H, Zeng Y, et al. EduMirror: Modeling Educational Social Dynamics with Value-driven Multi-agent Simulation, arXiv, 2026.</p>
+    <aside class="notes">强调 EduMirror 的关键不是“让学生说话”，而是把教育心理理论拆成可执行的价值状态与行动选择。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="3" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="EduMirror Experiments">
+    <span class="case-label"><span class="num">Case 01</span> EduMirror · 实验设计</span>
+    <h2 class="title-tight">验证逻辑：像不像人、机制是否合理、干预是否符合理论预期</h2>
+    <div class="method-map">
+      <div class="method-step"><div class="idx">01</div><h4>系统级验证</h4><p>覆盖 17 个教育场景，并与 ReAct、BabyAGI、LLMob、JAG-Concordia、D2A 等 baseline 比较。</p></div>
+      <div class="method-step"><div class="idx">02</div><h4>可扩展性测试</h4><p>在幼儿园场景中改变 agent 数量，评价自然性、一致性、合理性和发展适切性。</p></div>
+      <div class="method-step"><div class="idx">03</div><h4>校园欺凌案例</h4><p>比较无干预、权威惩戒、支持性个体干预和支持性合作干预。</p></div>
+      <div class="method-step"><div class="idx">04</div><h4>同伴互动案例</h4><p>测试 SVO 稳定性，并比较团队竞争、教师提醒和公平预教育策略。</p></div>
+    </div>
+    <div class="analysis-band">
+      <div class="analysis-card"><h3>行为相似性</h3><p>模拟学生的行为是否像真实学生，是否自然、连贯、可信。</p></div>
+      <div class="analysis-card"><h3>内部机制</h3><p>行为是否来自合理的心理需求和社会价值取向，而不是随机生成。</p></div>
+      <div class="analysis-card"><h3>反事实变化</h3><p>移除价值模型或改变教师干预后，结果是否按教育理论改变。</p></div>
+    </div>
+    <p class="citation">Lin J, Yu H, Zeng Y, et al. EduMirror, arXiv, 2026.</p>
+    <aside class="notes">这一页讲实验逻辑。三步检验尤其重要：行为表现、内部机制、干预后的反事实变化。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="4" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="EduMirror Analysis">
+    <span class="case-label"><span class="num">Case 01</span> EduMirror · 结果分析</span>
+    <h2 class="title-tight">“理论驱动 + 价值驱动”的优势在于让行为可解释、可消融、可干预</h2>
+    <div class="summary-grid">
+      <div class="panel">
+        <div class="big-number">3</div>
+        <h3>类分析问题</h3>
+        <ul class="tight-list">
+          <li>行为是否像人：LLM Rater 评估自然性、连贯性、可信性和人类相似度。</li>
+          <li>机制是否合理：LLM Surveyor 追踪安全感、归属感、自尊与心理健康。</li>
+          <li>干预是否有效：通过反事实比较分析教师干预和公平教育的影响。</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>方法启示</h3>
+        <div class="concept-grid two">
+          <div class="concept-card"><strong>理论先行</strong><p>先拆解教育构念，再映射为 agent 内部状态与行动规则。</p></div>
+          <div class="concept-card"><strong>状态追踪</strong><p>不是只看对话文本，还持续观测心理需求和社会价值。</p></div>
+          <div class="concept-card"><strong>干预比较</strong><p>同一情境下替换干预策略，观察心理和行为轨迹变化。</p></div>
+          <div class="concept-card"><strong>边界明确</strong><p>适合机制探索，不等价于真实教育系统的因果证明。</p></div>
+        </div>
+      </div>
+    </div>
+    <p class="citation">Lin J, Yu H, Zeng Y, et al. EduMirror, arXiv, 2026.</p>
+    <aside class="notes">收束 EduMirror：它的价值在于给教育干预提供一个可控的仿真实验台，而不是直接替代真实实验。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="5" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="Trust Method">
+    <span class="case-label"><span class="num">Case 02</span> Trust Behavior</span>
+    <h2 class="title-tight">用受控信任博弈校准 LLM Agent 的微观社会心理行为</h2>
+    <div class="split">
+      <div class="panel">
+        <h3>研究问题</h3>
+        <ul class="tight-list">
+          <li>如果把 LLM Agent 当作“人”的替身做社会模拟，它们的基本信任行为是否可靠。</li>
+          <li>信任是否来自互惠预期、风险感知或亲社会偏好，而不是任意生成。</li>
+          <li>Agent 输出行动的同时，也输出 Belief、Desire、Intention 以解释决策逻辑。</li>
+        </ul>
+        <div class="concept-grid two">
+          <div class="concept-card"><strong>Trustor</strong><p>出资方，决定转账金额，表达信任程度。</p></div>
+          <div class="concept-card"><strong>Trustee</strong><p>回报方，决定返还金额，体现互惠逻辑。</p></div>
+        </div>
+      </div>
+      <div class="figure-box tall"><img src="media/trust-game.png" alt="Trust game protocol"></div>
+    </div>
+    <p class="citation">Jia F, Ye Z, Lai S, et al. Can Large Language Model Agents Simulate Human Trust Behavior? NeurIPS, 2024.</p>
+    <aside class="notes">Trust Behavior 是微观校准案例。它不追求开放世界，而是用行为经济学实验把变量控制清楚。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="6" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="Trust Experiments">
+    <span class="case-label"><span class="num">Case 02</span> Trust Behavior · 实验方法</span>
+    <h2 class="title-tight">六类博弈分别拆解信任、慷慨、风险、亲社会偏好和动态互惠</h2>
+    <div class="method-map">
+      <div class="method-step"><div class="idx">01</div><h4>Trust Game</h4><p>衡量初始转账金额，观察 agent 是否表现出信任。</p></div>
+      <div class="method-step"><div class="idx">02</div><h4>Dictator Game</h4><p>区分“慷慨”与“相信对方会回报我”的互惠预期。</p></div>
+      <div class="method-step"><div class="idx">03</div><h4>MAP / Risky</h4><p>区分风险感知与信任对象，比较不同风险水平下的 trust rate。</p></div>
+      <div class="method-step"><div class="idx">04</div><h4>Repeated Game</h4><p>分析多轮信任动态，观察互惠关系是否稳定形成。</p></div>
+    </div>
+    <div class="concept-grid two mt-l">
+      <div class="concept-card"><strong>基础信任</strong><p>Agent 是否会主动把资源托付给他人。</p></div>
+      <div class="concept-card"><strong>互惠预期</strong><p>转账是否来自“对方会回报我”的信念。</p></div>
+      <div class="concept-card"><strong>风险感知</strong><p>Agent 是否根据不确定性调整信任强度。</p></div>
+      <div class="concept-card"><strong>亲社会偏好</strong><p>Agent 是否更愿意在人际互动中承担风险。</p></div>
+    </div>
+    <p class="citation">Jia F, Ye Z, Lai S, et al. Can Large Language Model Agents Simulate Human Trust Behavior? NeurIPS, 2024.</p>
+    <aside class="notes">这一页把实验拆成五个维度。重点是信任不是单一数字，而是由互惠、风险、偏好和动态学习共同构成。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="7" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="Trust Analysis">
+    <span class="case-label"><span class="num">Case 02</span> Trust Behavior · 结果分析</span>
+    <h2 class="title-tight">Behavioral Alignment：比较 Agent Trust 与 Human Trust 是否同构</h2>
+    <div class="analysis-band">
+      <div class="analysis-card"><h3>互惠预期</h3><p>比较 Trust Game 与 Dictator Game 的转账差异，判断信任是否建立在回报预期上。</p></div>
+      <div class="analysis-card"><h3>风险感知</h3><p>分析 MAP Trust Game 与 Risky Dictator Game 中 trust rate 随风险变化的曲线。</p></div>
+      <div class="analysis-card"><h3>信任动态</h3><p>通过 Repeated Trust Game 观察多轮转账、返还和比例稳定性。</p></div>
+    </div>
+    <div class="panel mt-l">
+      <h3>额外边界检查</h3>
+      <p class="lede">作者进一步分析人口属性偏差、人类 / LLM 对象差异、显式指令影响和 CoT 推理影响，以判断 trust behavior 的可操纵性。</p>
+    </div>
+    <p class="citation">Jia F, Ye Z, Lai S, et al. Can Large Language Model Agents Simulate Human Trust Behavior? NeurIPS, 2024.</p>
+    <aside class="notes">强调这个案例给社会仿真一个基本前提检查：如果微观信任行为都不稳定，复杂社会仿真的解释力就会被削弱。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="8" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="CompeteAI Method">
+    <span class="case-label"><span class="num">Case 03</span> CompeteAI</span>
+    <h2 class="title-tight">餐厅市场作为竞争环境：让微观策略在日级互动中形成宏观现象</h2>
+    <div class="split">
+      <div class="panel">
+        <h3>仿真场景</h3>
+        <ul class="tight-list">
+          <li>一个虚拟小镇中，两个餐厅作为竞争者，约 50 个顾客作为消费者和评价者。</li>
+          <li>餐厅通过菜单、厨师、广告、定价和经营策略争夺顾客。</li>
+          <li>顾客根据偏好、预算、健康需求、评论和群体讨论选择餐厅。</li>
+        </ul>
+        <h3 class="mt-l">核心问题</h3>
+        <p class="lede">LLM Agent 能否在竞争环境中形成策略适应，并产生差异化、模仿、马太效应和赢家通吃等市场现象。</p>
+      </div>
+      <div class="figure-box tall"><img src="media/compete-framework.png" alt="CompeteAI competitive market framework"></div>
+    </div>
+    <p class="citation">Zhao Q, Wang J, Zhang Y, et al. CompeteAI: Understanding the Competition Dynamics in Large Language Model-based Agents, arXiv, 2023.</p>
+    <aside class="notes">CompeteAI 是系统涌现案例。研究重点从个体校准转到竞争机制如何在多轮反馈中放大为市场结构。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="9" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="CompeteAI Experiments">
+    <span class="case-label"><span class="num">Case 03</span> CompeteAI · 实验设计</span>
+    <h2 class="title-tight">经营 API、顾客反馈和策略更新形成闭环</h2>
+    <div class="split wide-left">
+      <div class="figure-box tall"><img src="media/compete-pipeline.png" alt="CompeteAI simulation pipeline"></div>
+      <div class="panel">
+        <h3>15 天餐厅竞争仿真</h3>
+        <ul class="tight-list">
+          <li>如果某餐厅退出竞争，仿真提前结束。</li>
+          <li>设置个体顾客和群体顾客两种条件。</li>
+          <li>每天餐厅读取账本、顾客评论和竞争对手信息后调整策略。</li>
+          <li>顾客选择就餐并留下评分、评论和选择理由。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="concept-grid two">
+      <div class="concept-card"><strong>记录变量</strong><p>顾客流量、菜单变化、广告、评论、菜品评分、顾客选择理由和餐厅收益。</p></div>
+      <div class="concept-card"><strong>重复运行</strong><p>观察竞争策略是否稳定出现，以及顾客组织形式是否影响宏观结果。</p></div>
+    </div>
+    <p class="citation">Zhao Q, Wang J, Zhang Y, et al. CompeteAI, arXiv, 2023.</p>
+    <aside class="notes">突出 CompeteAI 的闭环：观察、行动、反馈、更新。它更接近一个简化市场实验室。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="10" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="CompeteAI Analysis">
+    <span class="case-label"><span class="num">Case 03</span> CompeteAI · 结果分析</span>
+    <h2 class="title-tight">从餐厅策略与顾客理由，推断宏观市场结构如何涌现</h2>
+    <div class="analysis-band">
+      <div class="analysis-card"><h3>微观策略</h3><p>分析餐厅是否从顾客流量、菜品反馈和竞争对手动作中识别竞争态势。</p></div>
+      <div class="analysis-card"><h3>顾客决策</h3><p>统计核心需求、品牌忠诚、口碑、价格、招牌菜和探索新事物等选择理由。</p></div>
+      <div class="analysis-card"><h3>宏观现象</h3><p>用流量曲线、菜单相似度、菜品评分和现象频率支持马太效应与赢家通吃分析。</p></div>
+    </div>
+    <div class="panel mt-l">
+      <h3>核心发现的解释方式</h3>
+      <p class="lede">差异化和模仿形成动态均衡；早期优势经由评论和评分反馈被放大；群体顾客更愿意探索新选择，因此可能削弱赢家通吃。</p>
+    </div>
+    <p class="citation">Zhao Q, Wang J, Zhang Y, et al. CompeteAI, arXiv, 2023.</p>
+    <aside class="notes">这一页讲从微观到宏观。CompeteAI 的意义在于展示市场结构不是预设出来，而是从策略和反馈中逐步形成。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="11" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="WarAgent Method">
+    <span class="case-label"><span class="num">Case 04</span> WarAgent</span>
+    <h2 class="title-tight">把国家建模为 Agent，模拟战争如何从多轮外交与动员中爆发</h2>
+    <div class="split">
+      <div class="panel">
+        <h3>研究问题</h3>
+        <ul class="tight-list">
+          <li>LLM Agent 是否能较真实地复现历史战略决策和国际关系演化。</li>
+          <li>某些战争触发事件是否比其他事件更关键。</li>
+          <li>历史战争是否不可避免，还是在改变条件后可能走向和平。</li>
+        </ul>
+        <h3 class="mt-l">国家 Agent Profile</h3>
+        <p class="lede">领导制度、军事能力、资源状况、历史背景、关键政策和公众士气。</p>
+      </div>
+      <div class="figure-box tall"><img src="media/waragent-system.png" alt="WarAgent system"></div>
+    </div>
+    <p class="citation">Hua W, Fan L, Li L, et al. War and Peace (WarAgent): LLM-based Multi-Agent Simulation of World Wars, arXiv, 2023.</p>
+    <aside class="notes">WarAgent 是宏观历史案例。这里的 Agent 不再是个人或企业，而是国家。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="12" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="WarAgent Experiments">
+    <span class="case-label"><span class="num">Case 04</span> WarAgent · 实验设计</span>
+    <h2 class="title-tight">从历史复现到反事实注入：检验战争路径对条件变化的敏感性</h2>
+    <div class="split">
+      <div class="figure-box tall"><img src="media/war-map-ww2.png" alt="World War II map"></div>
+      <div class="panel">
+        <ul class="tight-list">
+          <li>在一战、二战和战国等历史场景中运行仿真，检验国家 Agent 能否复现结盟、动员和宣战过程。</li>
+          <li>通过匿名化、反事实知识注入和去匿名化实验，判断行为基于情境推理还是历史记忆。</li>
+          <li>改变战争触发事件、决策风格和国家 profile 变量，观察战争是否仍会爆发。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="method-map">
+      <div class="method-step"><div class="idx">A</div><h4>等待</h4><p>国家选择观望，推迟外交或军事行动。</p></div>
+      <div class="method-step"><div class="idx">B</div><h4>总动员</h4><p>内部进入战争准备状态。</p></div>
+      <div class="method-step"><div class="idx">C</div><h4>结盟 / 条约</h4><p>国家间形成安全承诺或不干涉协议。</p></div>
+      <div class="method-step"><div class="idx">D</div><h4>宣战 / 和平</h4><p>冲突升级或通过外交走向缓和。</p></div>
+    </div>
+    <p class="citation">Hua W, Fan L, Li L, et al. WarAgent, arXiv, 2023.</p>
+    <aside class="notes">这页强调 WarAgent 的反事实设计。它不是只复现历史，也会改变条件看路径是否改变。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="13" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="WarAgent Analysis">
+    <span class="case-label"><span class="num">Case 04</span> WarAgent · 结果分析</span>
+    <h2 class="title-tight">结果分析同时需要数值对照、行动解释和反事实比较</h2>
+    <div class="analysis-band">
+      <div class="analysis-card"><h3>历史对照</h3><p>把仿真结果与真实同盟结构、宣战关系和总动员情况比较；用分区相似度和 Jaccard 相似度衡量重合程度。</p></div>
+      <div class="analysis-card"><h3>人工解释</h3><p>分析每个国家为什么做出某些行动，例如英法结盟、德奥结盟、美国不干涉或错误宣战。</p></div>
+      <div class="analysis-card"><h3>反事实比较</h3><p>改变触发事件、决策风格和国家 profile，观察是否只形成冷战、是否更早宣战或是否走向和平。</p></div>
+    </div>
+    <div class="panel mt-l">
+      <h3>边界</h3>
+      <p class="lede">该方法更适合探索“哪些因素可能改变战争路径”，而不是证明唯一因果或替代历史学解释。</p>
+    </div>
+    <p class="citation">Hua W, Fan L, Li L, et al. WarAgent, arXiv, 2023.</p>
+    <aside class="notes">收束 WarAgent：宏观仿真的难点是结果看起来宏大，但仍需要可解释的行动链条和反事实支撑。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="14" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="Comparison">
+    <p class="kicker">Cross-case Comparison</p>
+    <h2 class="title-tight">四个案例的共性：都在追求可解释、可验证、可对照的 Agent 仿真</h2>
+    <div class="split wide-left">
+      <div class="figure-box tall"><img src="media/comparison-table.png" alt="comparison table from original PPT"></div>
+      <div class="panel">
+        <h3>共同方法论</h3>
+        <ul class="tight-list">
+          <li>先定义社会机制，再构建 agent 角色、状态和互动规则。</li>
+          <li>不仅看输出是否合理，还检查内部状态、行为轨迹和宏观结果。</li>
+          <li>通过 baseline、消融或反事实比较，把“看起来像”转化为“可验证”。</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">这一页把四个案例放回同一个框架里。共同点是都避免只做故事生成，而是强调验证设计。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="15" data-total="16"></span></div>
+  </section>
+
+  <section class="slide" data-title="Summary">
+    <p class="kicker">Summary</p>
+    <h2 class="title-tight">LLM-Agent 社会仿真的关键，不是更像人，而是更可检验</h2>
+    <div class="synthesis">
+      <div class="concept-card"><strong>微观校准</strong><p>Trust Behavior 说明，在把 Agent 用作社会模拟参与者之前，需要先校准基础心理行为。</p></div>
+      <div class="concept-card"><strong>机制涌现</strong><p>CompeteAI 展示了如何从个体策略、反馈和重复互动中观察市场结构变化。</p></div>
+      <div class="concept-card"><strong>应用干预</strong><p>EduMirror 说明特定领域需要理论驱动建模，才能支持干预设计和反事实分析。</p></div>
+    </div>
+    <div class="panel mt-l">
+      <p class="lede">WarAgent 则提醒我们：当仿真对象上升到国家和历史冲突时，模型输出必须接受更强的历史对照、解释审查和反事实检验。</p>
+    </div>
+    <aside class="notes">最后给出一句话总结：社会科学仿真的价值不在于生成一个逼真的世界，而在于提供一个可检查机制的实验空间。</aside>
+    <div class="deck-footer"><span class="slide-number" data-current="16" data-total="16"></span></div>
+  </section>
+
+</div>
+<div class="deck-logos" aria-label="University logos">
+  <img src="media/logo-xjtlu-engineering.png" alt="Xi'an Jiaotong-Liverpool University engineering crest">
+  <img src="media/logo-xjtlu-book.png" alt="Xi'an Jiaotong-Liverpool University crest">
+</div>
+<script src="assets/runtime.js"></script>
+<script>
+(function () {
+  if (/[?&]preview=\d+/.test(window.location.search)) return;
+
+  function ready(fn) {
+    if (document.readyState !== 'loading') fn();
+    else document.addEventListener('DOMContentLoaded', fn);
+  }
+
+  function dispatchDeckKey(key) {
+    document.dispatchEvent(new KeyboardEvent('keydown', {
+      key: key,
+      bubbles: true,
+      cancelable: true
+    }));
+  }
+
+  ready(function () {
+    var controls = document.createElement('nav');
+    controls.className = 'slide-nav-controls';
+    controls.setAttribute('aria-label', '幻灯片翻页');
+    controls.innerHTML =
+      '<button class="slide-nav-btn" type="button" data-slide-nav="prev" aria-label="上一页" title="上一页"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>' +
+      '<button class="slide-nav-btn" type="button" data-slide-nav="next" aria-label="下一页" title="下一页"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>';
+
+    controls.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-slide-nav]');
+      if (!button) return;
+      dispatchDeckKey(button.getAttribute('data-slide-nav') === 'prev' ? 'PageUp' : 'PageDown');
+    });
+
+    document.body.appendChild(controls);
+  });
+})();
+</script>
+</body>
+</html>

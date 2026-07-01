@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "idea-agent"
+version = "0.1.0"
+description = "Evidence-grounded article knowledge graph compiler"
+requires-python = ">=3.8"
+dependencies = [
+  "beautifulsoup4>=4.12.0",
+  "pymupdf>=1.23.0",
+  "requests>=2.31.0",
+  "tqdm>=4.66.0",
+]
+
+[project.scripts]
+idea-agent = "idea_agent.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["idea_agent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
